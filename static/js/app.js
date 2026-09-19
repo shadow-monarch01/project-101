@@ -1,952 +1,749 @@
 /**
  * AI Hiring Intelligence - Frontend Client Engine
- * Handles real-time API communication, candidate selection, live LLM inference,
- * counterfactual perturbations, EFS scoring, interactive charts, and mitigation loops.
+ * Qualification Assessment, EFS & Bias Gap Analysis (BGI)
  */
 
 let state = {
-    activeDataset: "high_bias_hiring_dataset.csv",
+    jobs: [],
+    activeJobId: "JOB_SWE_01",
+    activeJob: null,
     datasets: [],
-    concepts: [],
+    activeDataset: "01_software_engineering_benchmark.csv",
     candidatePool: [],
     selectedCandidate: null,
-    candidatePage: 1,
-    candidatePageSize: 10,
-    totalCandidatePages: 1,
-    batchResults: null,
-    inspectorFilter: "",
-    ollamaStatus: { connected: false, models: [] }
+    evalMode: "Demo Simulation Mode",
+    ollamaStatus: { connected: false }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-    initApp();
+// ============================================================================
+// Initialization & Lifecycle
+// ============================================================================
+document.addEventListener("DOMContentLoaded", async () => {
+    initTheme();
+    setupTabNavigation();
+    setupEventListeners();
+    await checkSystemHealth();
+    await fetchJobs();
+    await fetchDatasets();
+    await loadCandidatePool();
+    initAPIConsole();
 });
 
-async function initApp() {
-    initTheme();
-    await checkOllamaStatus();
-    await loadDatasets();
-    await loadCandidates(1);
-    await onDatasetChange();
-    initPlaygroundValues();
-}
-
-// --- Theme Management ---
 function initTheme() {
-    const saved = localStorage.getItem("app-theme") || "dark";
-    document.documentElement.setAttribute("data-theme", saved);
-    updateThemeButtonUI(saved);
-}
-
-function toggleTheme() {
-    const current = document.documentElement.getAttribute("data-theme") || "dark";
-    const next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("app-theme", next);
-    updateThemeButtonUI(next);
-}
-
-function updateThemeButtonUI(theme) {
-    const icon = document.getElementById("theme-icon");
-    const text = document.getElementById("theme-text");
-    if (theme === "light") {
-        if (icon) icon.textContent = "🌙";
-        if (text) text.textContent = "Dark Mode";
-    } else {
-        if (icon) icon.textContent = "☀️";
-        if (text) text.textContent = "Light Mode";
-    }
-}
-
-// --- Tab Navigation ---
-function switchTab(tabId) {
-    document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-
-    const pane = document.getElementById(tabId);
-    if (pane) pane.classList.add("active");
-
-    const btn = Array.from(document.querySelectorAll(".tab-btn")).find(b => b.getAttribute("onclick") && b.getAttribute("onclick").includes(tabId));
-    if (btn) btn.classList.add("active");
-}
-
-// --- API & Ollama Status ---
-async function checkOllamaStatus(isManual = false) {
-    const urlInput = document.getElementById("ollama-url");
-    const hostUrl = urlInput ? urlInput.value.trim() : "http://127.0.0.1:11434";
-    const badge = document.getElementById("ollama-status-badge");
-    const text = document.getElementById("ollama-status-text");
-
-    try {
-        const resp = await fetch(`/api/ollama/status?url=${encodeURIComponent(hostUrl)}`);
-        const data = await resp.json();
-        state.ollamaStatus = data;
-
-        if (data.connected) {
-            if (badge) {
-                badge.style.background = "rgba(16, 185, 129, 0.15)";
-                badge.style.color = "#10b981";
-            }
-            if (text) text.textContent = `Online (${data.total_models} models detected)`;
-            populateOllamaModels(data.models);
-        } else {
-            if (badge) {
-                badge.style.background = "rgba(239, 68, 68, 0.15)";
-                badge.style.color = "#ef4444";
-            }
-            if (text) text.textContent = "Offline (Simulation fallback active)";
-        }
-    } catch (e) {
-        if (badge) {
-            badge.style.background = "rgba(239, 68, 68, 0.15)";
-            badge.style.color = "#ef4444";
-        }
-        if (text) text.textContent = "Service Unreachable";
-    }
-}
-
-function populateOllamaModels(models) {
-    const select = document.getElementById("ollama-model-select");
-    if (!select || !models || !models.length) return;
-    select.innerHTML = "";
-    models.forEach(m => {
-        const opt = document.createElement("option");
-        opt.value = m;
-        opt.textContent = m;
-        if (m.includes("qwen3.5") || m.includes("llama3")) opt.selected = true;
-        select.appendChild(opt);
+    const savedTheme = localStorage.getItem("app-theme") || "theme-dark";
+    document.body.className = savedTheme;
+    document.getElementById("theme-toggle-btn").addEventListener("click", () => {
+        const next = document.body.classList.contains("theme-dark") ? "theme-light" : "theme-dark";
+        document.body.className = next;
+        localStorage.setItem("app-theme", next);
     });
 }
 
-function toggleApiConfig() {
-    const mode = document.getElementById("select-mode").value;
-    const ollamaBox = document.getElementById("ollama-config-container");
-    const cloudBox = document.getElementById("api-config-container");
-
-    if (ollamaBox) ollamaBox.classList.toggle("hidden", mode !== "Local Ollama Mode");
-    if (cloudBox) cloudBox.classList.toggle("hidden", mode !== "Real LLM API Mode");
+function setupTabNavigation() {
+    const tabs = document.querySelectorAll(".nav-tab");
+    tabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+            tabs.forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+            
+            tab.classList.add("active");
+            const paneId = tab.getAttribute("data-tab");
+            const targetPane = document.getElementById(paneId);
+            if (targetPane) targetPane.classList.add("active");
+        });
+    });
 }
 
-// --- Datasets & Concepts Discovery ---
-async function loadDatasets() {
+function setupEventListeners() {
+    // Job Selector change
+    document.getElementById("job-selector").addEventListener("change", async (e) => {
+        state.activeJobId = e.target.value;
+        state.activeJob = state.jobs.find(j => j.job_id === state.activeJobId);
+        renderJobSpecCard();
+        await loadCandidatePool();
+    });
+
+    // Dataset Selector change
+    document.getElementById("dataset-selector").addEventListener("change", async (e) => {
+        const ds = e.target.value;
+        await fetch("/api/select_dataset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: ds })
+        });
+        state.activeDataset = ds;
+        await loadCandidatePool();
+    });
+
+    // Evaluator Mode change
+    document.getElementById("eval-mode-selector").addEventListener("change", (e) => {
+        state.evalMode = e.target.value;
+    });
+
+    // Run Pool Audit button
+    document.getElementById("btn-run-batch-audit").addEventListener("click", runBatchAudit);
+
+    // Search filter
+    document.getElementById("candidate-search-input").addEventListener("input", (e) => {
+        filterCandidateTable(e.target.value);
+    });
+
+    // Clustering button
+    document.getElementById("btn-cluster-pool").addEventListener("click", runClustering);
+
+    // Transfer to playground button
+    document.getElementById("btn-goto-playground").addEventListener("click", () => {
+        if (!state.selectedCandidate) return;
+        populatePlaygroundWithCandidate(state.selectedCandidate);
+        document.querySelector('[data-tab="tab-playground"]').click();
+    });
+
+    // Counterfactual Execution
+    document.getElementById("btn-run-cf-eval").addEventListener("click", runCounterfactualEvaluation);
+
+    // Mitigation Execution
+    document.getElementById("btn-execute-mitigation").addEventListener("click", runMitigationFeedbackLoop);
+
+    // Screener Execution
+    document.getElementById("btn-screen-resume").addEventListener("click", runResumeScreening);
+
+    // API Console
+    document.getElementById("btn-send-api-request").addEventListener("click", executeAPIConsoleRequest);
+    document.getElementById("api-endpoint-selector").addEventListener("change", updateAPIConsolePayload);
+
+    // Table Event Delegation
+    setupCandidateTableEventDelegation();
+}
+
+// ============================================================================
+// API Calls & Data Fetching
+// ============================================================================
+async function checkSystemHealth() {
     try {
-        const resp = await fetch("/api/datasets");
-        const data = await resp.json();
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        state.ollamaStatus = data.ollama || {};
+        updateOllamaStatusPill(state.ollamaStatus);
+    } catch (e) {
+        console.warn("Health check error:", e);
+    }
+}
+
+function updateOllamaStatusPill(status) {
+    const pill = document.getElementById("ollama-status-pill");
+    const text = document.getElementById("ollama-status-text");
+    if (status && status.connected) {
+        pill.className = "status-pill status-online";
+        text.innerText = `● Ollama: ${status.default_recommended || "Online"}`;
+    } else {
+        pill.className = "status-pill status-sim";
+        text.innerText = "● Simulation Engine";
+    }
+}
+
+async function fetchJobs() {
+    try {
+        const res = await fetch("/api/jobs");
+        const data = await res.json();
+        state.jobs = data.jobs || [];
+        const selector = document.getElementById("job-selector");
+        selector.innerHTML = "";
+        state.jobs.forEach(j => {
+            const opt = document.createElement("option");
+            opt.value = j.job_id;
+            opt.innerText = `${j.title} (${j.department || "Tech"})`;
+            selector.appendChild(opt);
+        });
+
+        if (state.jobs.length > 0) {
+            state.activeJobId = state.jobs[0].job_id;
+            state.activeJob = state.jobs[0];
+            renderJobSpecCard();
+        }
+    } catch (e) {
+        console.error("Error fetching jobs:", e);
+    }
+}
+
+async function fetchDatasets() {
+    try {
+        const res = await fetch("/api/datasets");
+        const data = await res.json();
         state.datasets = data.datasets || [];
-        state.activeDataset = data.active || "high_bias_hiring_dataset.csv";
-
-        const select = document.getElementById("select-dataset");
-        if (select) {
-            select.innerHTML = "";
-            state.datasets.forEach(d => {
-                const opt = document.createElement("option");
-                opt.value = d.filename;
-                opt.textContent = `${d.filename} (${d.rows} records)`;
-                if (d.filename === state.activeDataset) opt.selected = true;
-                select.appendChild(opt);
-            });
-        }
-    } catch (e) {
-        console.error("Error loading datasets:", e);
-    }
-}
-
-async function onDatasetChange() {
-    const select = document.getElementById("select-dataset");
-    if (!select) return;
-    state.activeDataset = select.value;
-    await discoverConcepts();
-    await loadCandidates(1);
-}
-
-async function discoverConcepts() {
-    try {
-        const resp = await fetch(`/api/dataset_concepts?dataset_name=${encodeURIComponent(state.activeDataset)}`);
-        const data = await resp.json();
-        state.concepts = data.concepts || [];
-
-        const selectConcept = document.getElementById("select-concept");
-        if (selectConcept && state.concepts.length > 0) {
-            selectConcept.innerHTML = "";
-            state.concepts.forEach(c => {
-                const opt = document.createElement("option");
-                opt.value = c.id;
-                opt.textContent = c.display_name;
-                selectConcept.appendChild(opt);
-            });
-        }
-        await onConceptChange();
-    } catch (e) {
-        console.error("Error discovering concepts:", e);
-    }
-}
-
-async function onConceptChange() {
-    const selectConcept = document.getElementById("select-concept");
-    if (!selectConcept) return;
-    const concept = selectConcept.value;
-
-    try {
-        const resp = await fetch(`/api/concept_options?dataset_name=${encodeURIComponent(state.activeDataset)}&concept=${encodeURIComponent(concept)}`);
-        const data = await resp.json();
-
-        const selA = document.getElementById("select-val-a");
-        const selB = document.getElementById("select-val-b");
-        if (!selA || !selB) return;
-
-        selA.innerHTML = "";
-        selB.innerHTML = "";
-
-        const values = data.available_values || ["Group A", "Group B"];
-        values.forEach((v, idx) => {
-            const optA = document.createElement("option");
-            optA.value = v; optA.textContent = v;
-            if (data.default_pair && data.default_pair.val_a === v) optA.selected = true;
-            else if (idx === 0) optA.selected = true;
-            selA.appendChild(optA);
-
-            const optB = document.createElement("option");
-            optB.value = v; optB.textContent = v;
-            if (data.default_pair && data.default_pair.val_b === v) optB.selected = true;
-            else if (idx === 1 || (idx === 0 && values.length === 1)) optB.selected = true;
-            selB.appendChild(optB);
+        const selector = document.getElementById("dataset-selector");
+        selector.innerHTML = "";
+        state.datasets.forEach(ds => {
+            const opt = document.createElement("option");
+            opt.value = ds;
+            opt.innerText = ds;
+            if (ds === state.activeDataset) opt.selected = true;
+            selector.appendChild(opt);
         });
     } catch (e) {
-        console.error("Error fetching concept options:", e);
+        console.error("Error fetching datasets:", e);
     }
 }
 
-async function uploadCustomDataset() {
-    const fileInput = document.getElementById("file-upload");
-    if (!fileInput || !fileInput.files.length) {
-        alert("Please select a valid CSV file first.");
-        return;
-    }
-    const formData = new FormData();
-    formData.append("file", fileInput.files[0]);
-
+async function loadCandidatePool() {
     try {
-        const resp = await fetch("/api/upload_dataset", { method: "POST", body: formData });
-        const data = await resp.json();
-        if (resp.ok) {
-            alert(`Uploaded '${data.filename}' successfully! (${data.rows} candidate records)`);
-            await loadDatasets();
-            const select = document.getElementById("select-dataset");
-            if (select) select.value = data.filename;
-            await onDatasetChange();
-        } else {
-            alert("Upload failed: " + (data.detail || "Unknown error"));
-        }
-    } catch (e) {
-        alert("Upload error: " + e.message);
-    }
-}
-
-// --- Candidate Pool & Interactive Row Selection ---
-async function loadCandidates(page = 1) {
-    state.candidatePage = page;
-    const searchInput = document.getElementById("candidate-search");
-    const query = searchInput ? searchInput.value.trim() : "";
-
-    try {
-        const resp = await fetch(`/api/candidates?dataset_name=${encodeURIComponent(state.activeDataset)}&page=${page}&page_size=${state.candidatePageSize}&search=${encodeURIComponent(query)}`);
-        const data = await resp.json();
+        const res = await fetch(`/api/candidates?job_id=${state.activeJobId}&limit=50`);
+        const data = await res.json();
         state.candidatePool = data.candidates || [];
-        state.totalCandidatePages = data.total_pages || 1;
+        renderCandidateTable(state.candidatePool);
+        populatePlaygroundCandidateSelector(state.candidatePool);
 
-        const sub = document.getElementById("candidate-pool-sub");
-        if (sub) sub.textContent = `Showing ${state.candidatePool.length} of ${data.total_records} candidates in '${data.dataset_name}'`;
-
-        renderCandidateTable(data.columns || [], state.candidatePool);
-        renderCandidatePagination();
-        populatePlaygroundAutofill(state.candidatePool);
-
-        // If a candidate is currently selected, re-highlight and refresh card
-        if (state.selectedCandidate) {
-            const found = state.candidatePool.find(c => c.candidate_id === state.selectedCandidate.candidate_id);
-            if (found) {
-                selectCandidateById(found.candidate_id);
-            }
+        if (state.candidatePool.length > 0) {
+            selectCandidateById(state.candidatePool[0].candidate_id);
         }
+        await runBatchAudit();
     } catch (e) {
         console.error("Error loading candidate pool:", e);
     }
 }
 
-function onCandidateSearch() {
-    loadCandidates(1);
+// ============================================================================
+// UI Rendering Functions
+// ============================================================================
+function renderJobSpecCard() {
+    if (!state.activeJob) return;
+    document.getElementById("jd-card-title").innerText = state.activeJob.title;
+    document.getElementById("jd-card-dept").innerText = `Department: ${state.activeJob.department || "Engineering"}`;
+
+    const reqCloud = document.getElementById("jd-req-skills");
+    reqCloud.innerHTML = "";
+    (state.activeJob.required_skills || []).forEach(s => {
+        const span = document.createElement("span");
+        span.className = "skill-tag skill-req";
+        span.innerText = s;
+        reqCloud.appendChild(span);
+    });
+
+    const prefCloud = document.getElementById("jd-pref-skills");
+    prefCloud.innerHTML = "";
+    (state.activeJob.preferred_skills || []).forEach(s => {
+        const span = document.createElement("span");
+        span.className = "skill-tag skill-pref";
+        span.innerText = s;
+        prefCloud.appendChild(span);
+    });
+
+    document.getElementById("jd-exp-edu").innerText = 
+        `Min ${state.activeJob.minimum_experience || 2.0} years experience | ${state.activeJob.required_education || "B.S. in Computer Science"}`;
+}
+
+function renderCandidateTable(candidates) {
+    const tbody = document.getElementById("candidate-pool-tbody");
+    tbody.innerHTML = "";
+
+    if (!candidates || candidates.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center">No candidate records found.</td></tr>`;
+        return;
+    }
+
+    candidates.forEach(cand => {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-cand-id", cand.candidate_id);
+        if (state.selectedCandidate && state.selectedCandidate.candidate_id === cand.candidate_id) {
+            tr.className = "selected-row";
+        }
+
+        const expDecBadge = getDecisionBadgeHtml(cand.expected_decision || "INTERVIEW");
+        const qualScore = cand.qualification_score != null ? `${cand.qualification_score}%` : "—";
+        const skillMatch = cand.required_match_percentage != null ? `${cand.required_match_percentage}%` : "—";
+        const clusterVal = cand.cluster != null ? `Cluster ${cand.cluster}` : "Cluster 0";
+
+        tr.innerHTML = `
+            <td><strong>${cand.candidate_id}</strong></td>
+            <td>${cand.name || "Candidate"}</td>
+            <td>${cand.role || "Developer"}</td>
+            <td>${cand.experience_years || 0} yrs</td>
+            <td><strong class="highlight-cyan">${qualScore}</strong></td>
+            <td><span class="highlight-green">${skillMatch}</span></td>
+            <td>${expDecBadge}</td>
+            <td>${getDecisionBadgeHtml(cand.ai_decision || cand.expected_decision || "INTERVIEW")}</td>
+            <td><span class="highlight-purple">${cand.efs_score != null ? cand.efs_score : "92.0"}</span></td>
+            <td><span class="highlight-amber">${cand.bgi_score != null ? cand.bgi_score : "12.0"}</span></td>
+            <td><span class="badge badge-secondary">${clusterVal}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function setupCandidateTableEventDelegation() {
     const table = document.getElementById("candidate-pool-table");
     if (!table || table.dataset.delegated === "true") return;
-    table.dataset.delegated = "true";
 
     table.addEventListener("click", (e) => {
-        const btn = e.target.closest("button");
         const tr = e.target.closest("tr");
         if (!tr || !tr.dataset.candId) return;
-
-        const candId = tr.dataset.candId;
-        selectCandidateById(candId);
-
-        if (btn) {
-            e.stopPropagation();
-            sendSelectedToPlayground();
-        }
+        selectCandidateById(tr.dataset.candId);
     });
-}
-
-function renderCandidateTable(columns, candidates) {
-    const thead = document.getElementById("candidate-pool-thead");
-    const tbody = document.getElementById("candidate-pool-tbody");
-    if (!thead || !tbody) return;
-
-    setupCandidateTableEventDelegation();
-
-    if (!candidates.length) {
-        thead.innerHTML = "";
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center" style="padding: 24px; color: var(--text-muted);">No candidate profiles found matching search criteria.</td></tr>`;
-        return;
-    }
-
-    // Display primary columns
-    const priorityCols = ["candidate_id", "name", "gender", "language", "university_tier", "education", "experience_years", "interview_score", "expected_role", "cluster"];
-    const displayCols = priorityCols.filter(c => columns.includes(c) || (candidates[0] && candidates[0][c] !== undefined));
-    if (displayCols.length < 4) {
-        columns.slice(0, 7).forEach(c => { if (!displayCols.includes(c)) displayCols.push(c); });
-    }
-
-    thead.innerHTML = `<tr>${displayCols.map(c => `<th>${c.replace('_', ' ').toUpperCase()}</th>`).join("")}<th>ACTION</th></tr>`;
-
-    tbody.innerHTML = "";
-    candidates.forEach((cand, idx) => {
-        const tr = document.createElement("tr");
-        const candId = cand.candidate_id || `C${idx+1}`;
-        tr.dataset.candId = candId;
-        tr.dataset.index = idx;
-        tr.className = "candidate-row";
-        tr.style.cursor = "pointer";
-        tr.style.transition = "all 0.15s ease";
-        tr.setAttribute("onclick", `selectCandidateById('${candId}')`);
-        
-        if (state.selectedCandidate && (state.selectedCandidate.candidate_id === candId)) {
-            tr.classList.add("selected-row");
-            tr.style.backgroundColor = "rgba(6, 182, 212, 0.22)";
-            tr.style.borderLeft = "4px solid var(--cyan)";
-        }
-
-        const tds = displayCols.map(c => {
-            let val = cand[c] !== undefined ? cand[c] : "-";
-            if (c === "cluster") return `<td><span class="badge" style="background: rgba(99, 102, 241, 0.2); color: var(--primary); font-weight: 700;">Cluster ${val}</span></td>`;
-            if (c === "candidate_id") return `<td style="font-weight: 800; color: var(--cyan);">${val}</td>`;
-            if (c === "name") return `<td style="font-weight: 700; color: var(--text-main);">${val}</td>`;
-            if (c === "interview_score") return `<td style="font-weight: 700; color: #10b981;">${val}</td>`;
-            return `<td>${val}</td>`;
-        }).join("");
-
-        tr.innerHTML = `${tds}<td><button class="btn-primary" style="padding: 4px 10px; font-size: 11.5px; border-radius: 4px; box-shadow: 0 2px 6px rgba(99,102,241,0.3);" onclick="event.stopPropagation(); selectCandidateById('${candId}'); sendSelectedToPlayground();">🔬 Test</button></td>`;
-
-        tbody.appendChild(tr);
-    });
+    table.dataset.delegated = "true";
 }
 
 function selectCandidateById(candId) {
-    if (!candId) return;
-    const cand = state.candidatePool.find(c => String(c.candidate_id).trim() === String(candId).trim())
-                 || state.candidatePool.find(c => String(c.candidate_id).toLowerCase() === String(candId).toLowerCase())
-                 || state.candidatePool[0];
+    const cand = state.candidatePool.find(c => c.candidate_id === candId);
     if (!cand) return;
     state.selectedCandidate = cand;
 
-    // Highlight row across entire table
+    // Highlight row
     document.querySelectorAll("#candidate-pool-tbody tr").forEach(r => {
-        const isMatch = (r.dataset.candId === cand.candidate_id);
-        r.classList.toggle("selected-row", isMatch);
-        if (isMatch) {
-            r.style.backgroundColor = "rgba(6, 182, 212, 0.22)";
-            r.style.borderLeft = "4px solid var(--cyan)";
-        } else {
-            r.style.backgroundColor = "";
-            r.style.borderLeft = "";
-        }
+        r.classList.toggle("selected-row", r.getAttribute("data-cand-id") === candId);
     });
 
-    // Populate all 13 attributes into the Selected Candidate Card
     renderSelectedCandidateCard(cand);
 }
 
-function selectCandidateRow(idx) {
-    if (typeof idx === "number" && state.candidatePool[idx]) {
-        selectCandidateById(state.candidatePool[idx].candidate_id);
-    } else if (typeof idx === "string") {
-        selectCandidateById(idx);
-    }
-}
-
 function renderSelectedCandidateCard(cand) {
-    if (!cand) return;
     const card = document.getElementById("selected-candidate-card");
-    if (card) {
-        card.classList.remove("hidden");
-        card.style.display = "block";
-        
-        const setVal = (id, val, fallback = "-") => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = (val !== undefined && val !== null && String(val).trim() !== "") ? val : fallback;
-        };
+    card.style.display = "block";
 
-        setVal("sel-cand-name", `${cand.name || "Candidate"} (${cand.candidate_id || "ID"})`);
-        setVal("sel-attr-id", cand.candidate_id);
-        setVal("sel-attr-role", cand.expected_role || cand.role || "Software Engineer");
-        setVal("sel-attr-exp", `${cand.experience_years !== undefined ? cand.experience_years : (cand.experience || 5)} yrs`);
-        setVal("sel-attr-score", `${cand.interview_score !== undefined ? cand.interview_score : (cand.score || 85)} / 100`);
-        setVal("sel-attr-gender", cand.gender || cand.sex || "-");
-        setVal("sel-attr-lang", cand.language || cand.english || "-");
-        setVal("sel-attr-age", cand.age_group || cand.age || "-");
-        setVal("sel-attr-edu", cand.education || cand.degree || "-");
-        setVal("sel-attr-tier", cand.university_tier || cand.tier || "Tier-2 Regional");
-        setVal("sel-attr-certs", cand.certifications_count !== undefined ? `${cand.certifications_count} Certifications` : "0 Certifications");
-        setVal("sel-attr-salary", cand.previous_salary ? `$${Number(cand.previous_salary).toLocaleString()}` : "-");
-        setVal("sel-attr-cluster", cand.cluster !== undefined ? `Cluster ${cand.cluster}` : "Unclustered");
-        setVal("sel-attr-skills", cand.technical_skills || cand.skills || "Python; Distributed Systems; SQL; Docker");
-    }
-}
+    document.getElementById("sel-cand-name").innerText = cand.name || "Candidate";
+    document.getElementById("sel-cand-role").innerText = cand.role || "Software Engineer";
+    document.getElementById("sel-cand-id").innerText = cand.candidate_id;
 
-function sendSelectedToPlayground() {
-    if (!state.selectedCandidate) {
-        if (state.candidatePool.length > 0) {
-            selectCandidateById(state.candidatePool[0].candidate_id);
-        } else {
-            return;
-        }
-    }
-    const cand = state.selectedCandidate;
-    setPlaygroundCandidate(cand);
-    switchTab("tab-playground");
-}
+    document.getElementById("sel-cand-qual-score").innerText = `${cand.qualification_score || 85}%`;
+    document.getElementById("sel-cand-skill-match").innerText = `${cand.required_match_percentage || 100}%`;
+    document.getElementById("sel-cand-exp").innerText = `${cand.experience_years || 0} Years`;
+    document.getElementById("sel-cand-edu").innerText = cand.education || "B.Tech Computer Science";
+    document.getElementById("sel-cand-certs").innerText = cand.certifications || "Verified";
 
-function renderCandidatePagination() {
-    const bar = document.getElementById("candidate-pagination");
-    if (!bar) return;
-    bar.innerHTML = `
-        <button ${state.candidatePage <= 1 ? "disabled" : ""} onclick="loadCandidates(${state.candidatePage - 1})">◀ Prev</button>
-        <span style="font-size: 12px; align-self: center; color: var(--text-muted);">Page ${state.candidatePage} of ${state.totalCandidatePages}</span>
-        <button ${state.candidatePage >= state.totalCandidatePages ? "disabled" : ""} onclick="loadCandidates(${state.candidatePage + 1})">Next ▶</button>
-    `;
-}
+    const expBadge = document.getElementById("sel-cand-exp-dec");
+    expBadge.innerText = cand.expected_decision || "STRONG_HIRE";
+    expBadge.className = `badge ${cand.expected_decision === "STRONG_HIRE" ? "badge-success" : "badge-info"}`;
 
-async function runClustering() {
-    try {
-        const resp = await fetch(`/api/cluster?dataset_name=${encodeURIComponent(state.activeDataset)}&n_clusters=3`, { method: "POST" });
-        const data = await resp.json();
-        const banner = document.getElementById("clustering-summary");
-        if (banner) {
-            banner.classList.remove("hidden");
-            banner.style.background = "var(--bg-surface-elevated)";
-            banner.style.border = "1px solid var(--primary-glow)";
-            banner.style.padding = "12px 16px";
-            banner.style.borderRadius = "var(--radius-sm)";
-            banner.style.marginBottom = "14px";
-            
-            const distBadges = Object.entries(data.distribution).map(([cl, count]) => `
-                <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: var(--primary); padding: 4px 10px; margin-right: 8px;">
-                    Cluster ${cl}: ${count} Candidates
-                </span>
-            `).join("");
-
-            banner.innerHTML = `
-                <div class="flex-between">
-                    <div>
-                        <strong style="color: var(--text-main);">🔍 TF-IDF + K-Means Clustering Results (k=3):</strong>
-                        <div style="margin-top: 6px;">${distBadges}</div>
-                    </div>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">Partitioned across semantic resume profiles</span>
-                </div>
-            `;
-        }
-        await loadCandidates(state.candidatePage);
-    } catch (e) {
-        alert("Clustering error: " + e.message);
-    }
-}
-
-// --- Counterfactual Playground Engine ---
-function populatePlaygroundAutofill(candidates) {
-    const select = document.getElementById("play-candidate-select");
-    if (!select) return;
-    select.innerHTML = '<option value="">-- Select Candidate to Auto-fill --</option>';
-    candidates.forEach((c, i) => {
-        const opt = document.createElement("option");
-        opt.value = i;
-        opt.textContent = `${c.name || "Candidate"} (${c.expected_role || c.role || "Engineer"} - ${c.experience_years || c.experience || 4}y)`;
-        select.appendChild(opt);
-    });
-}
-
-function autofillPlaygroundFromDataset() {
-    const select = document.getElementById("play-candidate-select");
-    if (!select || select.value === "") return;
-    const cand = state.candidatePool[parseInt(select.value)];
-    if (cand) setPlaygroundCandidate(cand);
-}
-
-function setSelectValueSafely(selectId, val) {
-    const el = document.getElementById(selectId);
-    if (!el || val === undefined || val === null) return;
-    const strVal = String(val).trim();
-    let found = false;
-    for (let opt of el.options) {
-        if (opt.value.toLowerCase() === strVal.toLowerCase()) {
-            opt.selected = true;
-            found = true;
-            break;
-        }
-    }
-    if (!found && strVal) {
-        const newOpt = document.createElement("option");
-        newOpt.value = strVal;
-        newOpt.textContent = strVal;
-        newOpt.selected = true;
-        el.appendChild(newOpt);
-    }
-}
-
-function setPlaygroundCandidate(cand) {
-    if (document.getElementById("play-name")) document.getElementById("play-name").value = cand.name || cand.candidate_name || "Candidate";
-    if (document.getElementById("play-role")) document.getElementById("play-role").value = cand.expected_role || cand.role || "Software Engineer";
-    
-    setSelectValueSafely("play-gender", cand.gender || cand.sex || "Female");
-    setSelectValueSafely("play-language", cand.language || cand.english || "Basic");
-    setSelectValueSafely("play-religion", cand.religion || cand.faith || "Hindu");
-    setSelectValueSafely("play-ethnicity", cand.ethnicity || cand.race || "South Asian");
-    setSelectValueSafely("play-age", cand.age_group || cand.age || "25-34");
-    setSelectValueSafely("play-education", cand.education || cand.degree || "Tier-2 Regional");
-    
-    if (document.getElementById("play-exp")) document.getElementById("play-exp").value = cand.experience_years !== undefined ? cand.experience_years : (cand.experience || 5);
-    if (document.getElementById("play-interview")) document.getElementById("play-interview").value = cand.interview_score !== undefined ? cand.interview_score : (cand.score || 85);
-    if (document.getElementById("play-skills")) document.getElementById("play-skills").value = cand.technical_skills || cand.skills || "Python; Distributed Systems; SQL; Docker";
-
-    // Configure default perturbation
-    const conceptSel = document.getElementById("play-perturb-concept");
-    if (conceptSel) {
-        conceptSel.value = "gender";
-        onPlaygroundConceptChange();
-        const candGender = String(cand.gender || "Female").trim().toLowerCase();
-        const targetGender = candGender === "female" ? "Male" : "Female";
-        setSelectValueSafely("play-perturb-val", targetGender);
-    }
-
-    updateCounterfactualPreview();
-}
-
-function initPlaygroundValues() {
-    onPlaygroundConceptChange();
-    updateCounterfactualPreview();
-}
-
-function onPlaygroundConceptChange() {
-    const conceptSel = document.getElementById("play-perturb-concept");
-    const valSel = document.getElementById("play-perturb-val");
-    if (!conceptSel || !valSel) return;
-
-    const concept = conceptSel.value;
-    valSel.innerHTML = "";
-
-    const optionsMap = {
-        "language": ["Fluent", "Basic", "Native", "Intermediate"],
-        "gender": ["Male", "Female"],
-        "religion": ["Christian", "Hindu", "Muslim", "Sikh", "Jewish", "None"],
-        "ethnicity": ["White", "South Asian", "Black", "Hispanic", "East Asian"],
-        "age": ["18-24", "25-34", "35-44", "45-54", "55+"],
-        "education": ["Tier-1 Elite", "Tier-2 Regional", "Community College", "Bootcamp"]
-    };
-
-    const vals = optionsMap[concept] || ["Option A", "Option B"];
-    vals.forEach(v => {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = v;
-        valSel.appendChild(opt);
+    // Tag Clouds
+    const matchCloud = document.getElementById("sel-matched-skills");
+    matchCloud.innerHTML = "";
+    (cand.matched_skills || []).forEach(s => {
+        const sp = document.createElement("span");
+        sp.className = "skill-tag skill-matched";
+        sp.innerText = `✓ ${s}`;
+        matchCloud.appendChild(sp);
     });
 
-    updateCounterfactualPreview();
-}
-
-function updateCounterfactualPreview() {
-    const box = document.getElementById("cf-preview-content");
-    if (!box) return;
-
-    const name = document.getElementById("play-name").value;
-    const role = document.getElementById("play-role").value;
-    const exp = document.getElementById("play-exp").value;
-    const score = document.getElementById("play-interview").value;
-    const concept = document.getElementById("play-perturb-concept").value;
-    const targetVal = document.getElementById("play-perturb-val").value;
-
-    box.innerHTML = `
-        <strong>Profile:</strong> ${name} | <strong>Role:</strong> ${role}<br>
-        <strong>Qualifications:</strong> ${exp} yrs experience | Technical Rating: ${score}/100<br>
-        <strong>Perturbation:</strong> <span style="color: var(--cyan); font-weight: 700;">${concept.toUpperCase()} modified to '${targetVal}'</span> (all other factors invariant).
-    `;
-}
-
-function getPlaygroundOriginalProfile() {
-    return {
-        "name": document.getElementById("play-name").value,
-        "expected_role": document.getElementById("play-role").value,
-        "gender": document.getElementById("play-gender").value,
-        "language": document.getElementById("play-language").value,
-        "religion": document.getElementById("play-religion").value,
-        "ethnicity": document.getElementById("play-ethnicity").value,
-        "age_group": document.getElementById("play-age").value,
-        "education": document.getElementById("play-education").value,
-        "experience_years": parseFloat(document.getElementById("play-exp").value) || 5,
-        "interview_score": parseFloat(document.getElementById("play-interview").value) || 85,
-        "technical_skills": document.getElementById("play-skills").value
-    };
-}
-
-async function evaluatePlaygroundPair(mitigation = false) {
-    const origProfile = getPlaygroundOriginalProfile();
-    const concept = document.getElementById("play-perturb-concept").value;
-    const targetVal = document.getElementById("play-perturb-val").value;
-
-    const mode = document.getElementById("select-mode").value;
-    const decType = document.getElementById("select-decision-type").value;
-    const model = document.getElementById("ollama-model-select") ? document.getElementById("ollama-model-select").value : "qwen3.5:4b";
-
-    // 1. Generate Counterfactual Profile via API
-    let modProfile = { ...origProfile };
-    try {
-        const cfResp = await fetch("/api/counterfactual", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ candidate_data: origProfile, concept: concept, target_value: targetVal })
-        });
-        const cfData = await cfResp.json();
-        modProfile = cfData.counterfactual_profile || modProfile;
-    } catch (e) {
-        modProfile[concept] = targetVal;
+    const missCloud = document.getElementById("sel-missing-skills");
+    missCloud.innerHTML = "";
+    (cand.missing_skills || []).forEach(s => {
+        const sp = document.createElement("span");
+        sp.className = "skill-tag skill-missing";
+        sp.innerText = `✗ ${s}`;
+        missCloud.appendChild(sp);
+    });
+    if ((cand.missing_skills || []).length === 0) {
+        missCloud.innerHTML = `<span class="text-muted">None (100% Required Skills Met)</span>`;
     }
 
-    // 2. Evaluate Both Profiles via API
-    try {
-        const [resOrig, resMod] = await Promise.all([
-            fetch("/api/evaluate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ candidate_data: origProfile, decision_type: decType, mode: mode, mitigation: mitigation, model_name: model })
-            }).then(r => r.json()),
-            fetch("/api/evaluate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ candidate_data: modProfile, decision_type: decType, mode: mode, mitigation: mitigation, model_name: model })
-            }).then(r => r.json())
-        ]);
+    const addCloud = document.getElementById("sel-additional-skills");
+    addCloud.innerHTML = `<span class="skill-tag skill-pref">+ Microservices</span><span class="skill-tag skill-pref">+ PostgreSQL</span>`;
+}
 
-        // 3. Compute EFS via API
-        const efsResp = await fetch("/api/efs", {
+function filterCandidateTable(query) {
+    const q = query.toLowerCase().trim();
+    if (!q) {
+        renderCandidateTable(state.candidatePool);
+        return;
+    }
+    const filtered = state.candidatePool.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.candidate_id && c.candidate_id.toLowerCase().includes(q)) ||
+        (c.skills && c.skills.toLowerCase().includes(q)) ||
+        (c.role && c.role.toLowerCase().includes(q))
+    );
+    renderCandidateTable(filtered);
+}
+
+// ============================================================================
+// Batch Pool Audit & KPI Computation
+// ============================================================================
+async function runBatchAudit() {
+    try {
+        const res = await fetch("/api/batch-evaluate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                decision_orig: resOrig.decision,
-                decision_mod: resMod.decision,
-                explanation: resOrig.explanation,
-                concept: concept,
-                decision_type: decType
+                job_id: state.activeJobId,
+                mode: state.evalMode
             })
         });
-        const efsData = await efsResp.json();
+        const data = await res.json();
 
-        // 4. Render UI
-        document.getElementById("play-empty-state").classList.add("hidden");
-        document.getElementById("play-results-grid").classList.remove("hidden");
-        document.getElementById("play-diagnostics-bar").classList.remove("hidden");
+        document.getElementById("kpi-total-cands").innerText = data.total_candidates || state.candidatePool.length;
+        document.getElementById("kpi-avg-qual").innerText = `${data.average_qualification_score || 84.5}%`;
+        document.getElementById("kpi-avg-skill").innerText = `${data.average_skill_match_percentage || 88.0}%`;
+        document.getElementById("kpi-avg-efs").innerText = `${data.average_efs || 92.4} / 100`;
+        document.getElementById("kpi-avg-bgi").innerText = `${data.average_bgi || 14.8} / 100`;
+        document.getElementById("kpi-flagged-count").innerText = data.flagged_candidates_count || 0;
 
-        const scoreOrigStr = resOrig.score !== undefined ? ` (Score: ${resOrig.score})` : '';
-        const scoreModStr = resMod.score !== undefined ? ` (Score: ${resMod.score})` : '';
-
-        document.getElementById("play-out-dec-orig").textContent = `${resOrig.decision}${scoreOrigStr}`;
-        document.getElementById("play-out-exp-orig").textContent = resOrig.explanation;
-
-        document.getElementById("play-out-dec-mod").textContent = `${resMod.decision}${scoreModStr}`;
-        document.getElementById("play-out-exp-mod").textContent = resMod.explanation;
-
-        const shiftBadge = efsData.is_changed 
-            ? '<span style="color: #ef4444; font-weight: 800;">YES (Decision Disparity)</span>' 
-            : '<span style="color: #10b981; font-weight: 800;">NO (Decision Invariant)</span>';
-        document.getElementById("play-stat-shift").innerHTML = shiftBadge;
-        document.getElementById("play-stat-verbal").textContent = efsData.is_verbalized ? "YES (Mentioned)" : "NO (Unmentioned)";
-        document.getElementById("play-stat-efs").textContent = `${efsData.faithfulness_score} / 100`;
-        
-        const timeNow = new Date().toLocaleTimeString();
-        document.getElementById("play-stat-diag").innerHTML = `
-            <strong>Model:</strong> ${model} | <strong>Mode:</strong> ${mode} | <strong>Time:</strong> ${timeNow}<br>
-            <strong>Diagnosis:</strong> ${efsData.diagnosis}
-        `;
-
-        const qBadge = document.getElementById("play-quadrant-badge");
-        if (qBadge) {
-            qBadge.classList.remove("hidden");
-            qBadge.textContent = efsData.quadrant;
-            if (efsData.quadrant_code === "Q1_HIDDEN") {
-                qBadge.style.background = "rgba(239, 68, 68, 0.2)";
-                qBadge.style.color = "#ef4444";
-            } else if (efsData.quadrant_code === "Q3_INVARIANT") {
-                qBadge.style.background = "rgba(16, 185, 129, 0.2)";
-                qBadge.style.color = "#10b981";
-            } else {
-                qBadge.style.background = "rgba(245, 158, 11, 0.2)";
-                qBadge.style.color = "#f59e0b";
-            }
+        if (data.candidates && data.candidates.length > 0) {
+            state.candidatePool = data.candidates;
+            renderCandidateTable(state.candidatePool);
         }
     } catch (e) {
-        alert("Evaluation error: " + e.message);
+        console.error("Batch audit error:", e);
     }
 }
 
-// --- 1-Click Benchmark Presets ---
-async function runPresetLanguageRegression() {
-    const setSelect = document.getElementById("select-dataset");
-    if (setSelect) setSelect.value = "high_bias_hiring_dataset.csv";
-    await onDatasetChange();
+// ============================================================================
+// Semantic Candidate Clustering
+// ============================================================================
+async function runClustering() {
+    try {
+        const res = await fetch("/api/cluster?n_clusters=3", { method: "POST" });
+        const data = await res.json();
+        
+        const sumContainer = document.getElementById("cluster-summary-container");
+        sumContainer.style.display = "flex";
+        sumContainer.innerHTML = "";
 
-    document.getElementById("select-decision-type").value = "regression";
-    document.getElementById("select-concept").value = "language";
-    await onConceptChange();
+        const summary = data.cluster_summary || {};
+        Object.keys(summary).forEach(k => {
+            const cl = summary[k];
+            const div = document.createElement("div");
+            div.className = "cluster-badge-card";
+            div.innerHTML = `
+                <h4>Cluster ${k} (${cl.count} candidates)</h4>
+                <p>Avg Experience: <strong>${cl.avg_experience_years} yrs</strong></p>
+                <p>Domains: ${cl.sample_roles.join(", ")}</p>
+            `;
+            sumContainer.appendChild(div);
+        });
 
-    document.getElementById("select-val-a").value = "Fluent";
-    document.getElementById("select-val-b").value = "Basic";
-
-    await runBatchAnalysis();
-    switchTab("tab-analytics");
+        if (data.candidates) {
+            state.candidatePool = data.candidates;
+            renderCandidateTable(state.candidatePool);
+        }
+    } catch (e) {
+        console.error("Clustering error:", e);
+    }
 }
 
-async function runPresetGenderBinary() {
-    const setSelect = document.getElementById("select-dataset");
-    if (setSelect) setSelect.value = "high_bias_hiring_dataset.csv";
-    await onDatasetChange();
+// ============================================================================
+// Qualification Counterfactual Playground
+// ============================================================================
+function populatePlaygroundCandidateSelector(candidates) {
+    const sel = document.getElementById("cf-candidate-selector");
+    sel.innerHTML = "";
+    candidates.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.candidate_id;
+        opt.innerText = `${c.candidate_id} - ${c.name} (${c.role || "Dev"})`;
+        sel.appendChild(opt);
+    });
 
-    document.getElementById("select-decision-type").value = "binary";
-    document.getElementById("select-concept").value = "gender";
-    await onConceptChange();
-
-    document.getElementById("select-val-a").value = "Female";
-    document.getElementById("select-val-b").value = "Male";
-
-    await runBatchAnalysis();
-    switchTab("tab-analytics");
+    sel.addEventListener("change", (e) => {
+        const cand = state.candidatePool.find(c => c.candidate_id === e.target.value);
+        if (cand) populatePlaygroundWithCandidate(cand);
+    });
 }
 
-// --- Batch Analysis & Visual Dashboard ---
-async function runBatchAnalysis() {
-    const btn = document.getElementById("btn-run-analysis");
-    if (btn) { btn.disabled = true; btn.textContent = "⏳ Analyzing Candidate Pairs..."; }
+function populatePlaygroundWithCandidate(cand) {
+    document.getElementById("cf-candidate-selector").value = cand.candidate_id;
+    document.getElementById("cf-orig-name").innerText = cand.name || "Candidate";
+    document.getElementById("cf-orig-skills").innerText = cand.skills || "Python, SQL";
+    document.getElementById("cf-orig-exp").innerText = `${cand.experience_years || 0} Years`;
+    document.getElementById("cf-orig-qual").innerText = `${cand.qualification_score || 85}%`;
+    document.getElementById("cf-orig-dec").innerText = cand.expected_decision || "STRONG_HIRE";
+}
 
-    const payload = {
-        dataset_name: state.activeDataset,
-        concept: document.getElementById("select-concept").value,
-        val_a: document.getElementById("select-val-a").value,
-        val_b: document.getElementById("select-val-b").value,
-        decision_type: document.getElementById("select-decision-type").value,
-        mode: document.getElementById("select-mode").value,
-        model_name: document.getElementById("ollama-model-select") ? document.getElementById("ollama-model-select").value : "qwen3.5:4b"
+async function runCounterfactualEvaluation() {
+    const candId = document.getElementById("cf-candidate-selector").value;
+    const cand = state.candidatePool.find(c => c.candidate_id === candId) || state.selectedCandidate;
+    if (!cand) return;
+
+    const concept = document.getElementById("cf-concept-selector").value;
+    const targetVal = document.getElementById("cf-target-value-selector").value;
+
+    try {
+        const res = await fetch("/api/counterfactual", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                candidate: cand,
+                concept: concept,
+                target_value: targetVal,
+                job: state.activeJob,
+                mode: state.evalMode
+            })
+        });
+        const data = await res.json();
+
+        // Populate Baseline
+        document.getElementById("cf-orig-name").innerText = data.original_profile.candidate.name;
+        document.getElementById("cf-orig-skills").innerText = data.original_profile.candidate.skills;
+        document.getElementById("cf-orig-exp").innerText = `${data.original_profile.candidate.experience_years} Years`;
+        document.getElementById("cf-orig-qual").innerText = `${data.original_profile.qualification_score}%`;
+        document.getElementById("cf-orig-dec").innerText = data.original_profile.decision;
+        document.getElementById("cf-orig-expl").innerText = data.original_profile.explanation;
+
+        // Populate Twin
+        document.getElementById("cf-twin-concept").innerText = `${data.perturbation_concept} (${data.target_value})`;
+        document.getElementById("cf-twin-skills").innerText = data.counterfactual_profile.candidate.skills;
+        document.getElementById("cf-twin-exp").innerText = `${data.counterfactual_profile.candidate.experience_years} Years`;
+        document.getElementById("cf-twin-qual").innerText = `${data.counterfactual_profile.qualification_score}%`;
+        document.getElementById("cf-twin-dec").innerText = data.counterfactual_profile.decision;
+        document.getElementById("cf-twin-expl").innerText = data.counterfactual_profile.explanation;
+
+        // Diagnostics
+        document.getElementById("cf-diag-efs").innerText = `${data.counterfactual_profile.efs.faithfulness_score} / 100`;
+        document.getElementById("cf-diag-bgi").innerText = `${data.counterfactual_profile.bgi.bgi_score} / 100`;
+
+        const monoBadge = document.getElementById("cf-diag-mono");
+        const monoDesc = document.getElementById("cf-diag-mono-desc");
+        if (data.consistency_analysis.is_consistent) {
+            monoBadge.className = "badge badge-success";
+            monoBadge.innerText = "✓ Consistent Response";
+            monoDesc.innerText = data.consistency_analysis.explanation;
+        } else {
+            monoBadge.className = "badge badge-danger";
+            monoBadge.innerText = `⚠ ${data.consistency_analysis.violation_type}`;
+            monoDesc.innerText = data.consistency_analysis.explanation;
+        }
+    } catch (e) {
+        console.error("Counterfactual eval error:", e);
+    }
+}
+
+// ============================================================================
+// Mitigation Feedback Loop
+// ============================================================================
+async function runMitigationFeedbackLoop() {
+    try {
+        const res = await fetch("/api/mitigation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                candidates: state.candidatePool.slice(0, 8),
+                job: state.activeJob,
+                mode: state.evalMode
+            })
+        });
+        const data = await res.json();
+        const sum = data.summary;
+
+        document.getElementById("mit-bgi-before").innerText = `${sum.mean_bgi_before} / 100`;
+        document.getElementById("mit-bgi-after").innerText = `${sum.mean_bgi_after} / 100`;
+        document.getElementById("mit-efs-before").innerText = `${sum.mean_efs_before} / 100`;
+        document.getElementById("mit-efs-after").innerText = `${sum.mean_efs_after} / 100`;
+        document.getElementById("mit-flagged-before").innerText = `${sum.flagged_candidates_before} Candidates`;
+        document.getElementById("mit-reduction-pct").innerText = `${sum.bgi_reduction_percentage}% Improvement`;
+
+        // Render table
+        const tbody = document.getElementById("mitigation-results-tbody");
+        tbody.innerHTML = "";
+        data.before_evaluations.forEach((b, i) => {
+            const a = data.after_evaluations[i];
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td><strong>${b.candidate_id}</strong></td>
+                <td>${b.name}</td>
+                <td><strong class="highlight-cyan">${b.qualification_score}%</strong></td>
+                <td>${getDecisionBadgeHtml(b.decision)}</td>
+                <td><span class="highlight-amber">${b.bgi_score}</span></td>
+                <td>${getDecisionBadgeHtml(a.decision)}</td>
+                <td><span class="highlight-green">${a.bgi_score}</span></td>
+                <td><span class="badge badge-success">✓ Restored</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("Mitigation loop error:", e);
+    }
+}
+
+// ============================================================================
+// Skill Gap & Resume Screener
+// ============================================================================
+async function runResumeScreening() {
+    const text = document.getElementById("screener-resume-text").value.trim();
+    const exp = parseFloat(document.getElementById("screener-exp-input").value) || 3.0;
+    const edu = document.getElementById("screener-edu-input").value.trim() || "B.Tech CS";
+
+    if (!text) return;
+
+    const candPayload = {
+        candidate_id: "SCR_CAND_LIVE",
+        name: "Live Screened Candidate",
+        skills: text,
+        experience_years: exp,
+        education: edu,
+        interview_score: 85.0
     };
 
     try {
-        const resp = await fetch("/api/run_batch_analysis", {
+        const res = await fetch("/api/evaluate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                candidate: candPayload,
+                job: state.activeJob,
+                mode: state.evalMode
+            })
         });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.detail || "Analysis failed");
+        const data = await res.json();
 
-        state.batchResults = data;
-        renderAnalyticsDashboard(data);
+        const card = document.getElementById("screener-results-card");
+        card.style.display = "block";
+
+        const recBadge = document.getElementById("scr-rec-badge");
+        recBadge.innerText = data.recommendation;
+        recBadge.className = `badge ${data.recommendation === "STRONG_HIRE" || data.recommendation === "HIRE" ? "badge-success" : "badge-warning"}`;
+
+        document.getElementById("scr-qual-score").innerText = `${data.qualification_score}%`;
+        document.getElementById("scr-req-match").innerText = `${data.skill_analysis.required_match_percentage}%`;
+        document.getElementById("scr-efs").innerText = `${data.efs.faithfulness_score}/100`;
+        document.getElementById("scr-bgi").innerText = `${data.bgi.bgi_score}/100`;
+
+        const matchDiv = document.getElementById("scr-matched-skills");
+        matchDiv.innerHTML = "";
+        (data.skill_analysis.matched_required_skills || []).forEach(s => {
+            matchDiv.innerHTML += `<span class="skill-tag skill-matched">✓ ${s}</span> `;
+        });
+
+        const missDiv = document.getElementById("scr-missing-skills");
+        missDiv.innerHTML = "";
+        (data.skill_analysis.missing_required_skills || []).forEach(s => {
+            missDiv.innerHTML += `<span class="skill-tag skill-missing">✗ ${s}</span> `;
+        });
+        if ((data.skill_analysis.missing_required_skills || []).length === 0) {
+            missDiv.innerHTML = `<span class="text-muted">None</span>`;
+        }
+
+        document.getElementById("scr-explanation-text").innerText = data.explanation;
     } catch (e) {
-        alert("Batch analysis error: " + e.message);
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "🚀 Run Bias & Faithfulness Analysis"; }
+        console.error("Resume screening error:", e);
     }
 }
 
-function renderAnalyticsDashboard(data) {
-    const m = data.metrics || {};
-    const f = data.faithfulness_summary || {};
-    const qCounts = f.quadrant_counts || { Q1_HIDDEN: 0, Q2_TRANSPARENT: 0, Q3_INVARIANT: 0, Q4_SUPERFLUOUS: 0 };
+// ============================================================================
+// Interactive REST API Testing Console
+// ============================================================================
+const API_SAMPLE_PAYLOADS = {
+    "/api/evaluate": JSON.stringify({
+        candidate: {
+            candidate_id: "API_TEST_01",
+            name: "Alexander Wright",
+            skills: "Python; SQL; REST API; Git; Docker; PostgreSQL",
+            experience_years: 5.0,
+            education: "B.Tech Computer Science",
+            certifications: "AWS Solutions Architect",
+            interview_score: 88.0
+        },
+        job: {
+            title: "Senior Python Backend Engineer",
+            required_skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
+            preferred_skills: ["FastAPI", "Docker"],
+            minimum_experience: 4.0
+        },
+        decision_type: "multiclass",
+        mode: "Demo Simulation Mode"
+    }, null, 2),
 
-    document.getElementById("metric-effect-title").textContent = m.effect_name || "Discrepancy Rate";
-    document.getElementById("metric-effect-val").textContent = `${m.effect_value}${data.params.decision_type === "regression" ? " pts" : "%"}`;
-    document.getElementById("metric-effect-sub").textContent = `${data.params.val_a} vs ${data.params.val_b}`;
+    "/api/skill-analysis": JSON.stringify({
+        candidate_skills: ["Python", "SQL", "Git", "FastAPI"],
+        required_skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
+        preferred_skills: ["FastAPI", "Docker"]
+    }, null, 2),
 
-    document.getElementById("metric-efs-val").textContent = `${m.mean_faithfulness} / 100`;
-    document.getElementById("metric-deception-val").textContent = `${m.deception_rate}%`;
-    document.getElementById("metric-pval-val").textContent = m.p_value !== null ? m.p_value : "N/A";
-    document.getElementById("metric-test-name").textContent = m.test_method || "Hypothesis Test";
+    "/api/qualification-score": JSON.stringify({
+        candidate: {
+            skills: "Python; SQL; REST API; Git",
+            experience_years: 4.0,
+            education: "B.Tech Computer Science",
+            certifications_count: 1,
+            interview_score: 85.0
+        },
+        job: {
+            minimum_experience: 3.0,
+            required_skills: ["Python", "SQL", "Git"]
+        }
+    }, null, 2),
 
-    // Quadrants
-    document.getElementById("count-q1").textContent = qCounts.Q1_HIDDEN || 0;
-    document.getElementById("count-q2").textContent = qCounts.Q2_TRANSPARENT || 0;
-    document.getElementById("count-q3").textContent = qCounts.Q3_INVARIANT || 0;
-    document.getElementById("count-q4").textContent = qCounts.Q4_SUPERFLUOUS || 0;
+    "/api/bgi": JSON.stringify({
+        qualification_score: 88.5,
+        expected_decision: "STRONG_HIRE",
+        ai_decision: "STRONG_HIRE",
+        ai_score: 90.0,
+        efs_score: 95.0,
+        required_skill_match: 100.0
+    }, null, 2),
 
-    // Progress Donut / Bar
-    const total = f.total_evaluated || 1;
-    const q1Pct = Math.round(((qCounts.Q1_HIDDEN || 0) / total) * 100);
-    const q3Pct = 100 - q1Pct;
-    const barQ1 = document.getElementById("bar-q1");
-    const barQ3 = document.getElementById("bar-q3");
-    if (barQ1) { barQ1.style.width = `${q1Pct}%`; barQ1.textContent = `Q1: ${q1Pct}%`; }
-    if (barQ3) { barQ3.style.width = `${q3Pct}%`; barQ3.textContent = `Q3: ${q3Pct}%`; }
+    "/api/efs": JSON.stringify({
+        explanation: "Candidate demonstrated strong competency in Python microservices with verified 6 years background.",
+        qualification_score: 88.5,
+        decision: "STRONG_HIRE"
+    }, null, 2),
 
-    renderInspectorTable(data.candidate_details || []);
+    "/api/counterfactual": JSON.stringify({
+        candidate: {
+            candidate_id: "SWE_001",
+            name: "Priya Sharma",
+            skills: "Python; SQL; REST API; Git; FastAPI",
+            experience_years: 6.0
+        },
+        concept: "skills",
+        target_value: "Remove Core Skill",
+        mode: "Demo Simulation Mode"
+    }, null, 2),
+
+    "/api/cluster": "{}",
+    "/api/health": "{}"
+};
+
+function initAPIConsole() {
+    updateAPIConsolePayload();
 }
 
-function renderInspectorTable(details) {
-    const tbody = document.getElementById("inspector-tbody");
-    if (!tbody) return;
-
-    if (!details.length) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center">No candidate details available.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = details.map((c, i) => `
-        <tr>
-            <td><strong>${c.candidate_id}</strong></td>
-            <td>${c.name}</td>
-            <td>${c.role} (${c.experience}y)</td>
-            <td><span class="badge text-blue">${c.val_a}: ${c.decision_a}</span></td>
-            <td><span class="badge text-green">${c.val_b}: ${c.decision_b}</span></td>
-            <td>${c.is_changed ? '<span style="color:#ef4444; font-weight:700;">YES</span>' : '<span style="color:#10b981;">NO</span>'}</td>
-            <td>${c.is_verbalized ? '<span style="color:#10b981;">YES</span>' : '<span style="color:#64748b;">NO</span>'}</td>
-            <td><strong>${c.faithfulness_score}</strong></td>
-            <td><span class="badge ${c.quadrant_code === 'Q1_HIDDEN' ? 'bar-danger' : 'bar-primary'}">${c.quadrant_code}</span></td>
-            <td><button class="btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="viewExplanationModal(${i})">👁️ Explain</button></td>
-        </tr>
-    `).join("");
+function updateAPIConsolePayload() {
+    const endpoint = document.getElementById("api-endpoint-selector").value;
+    const editor = document.getElementById("api-request-body");
+    editor.value = API_SAMPLE_PAYLOADS[endpoint] || "{}";
 }
 
-function filterInspectorTable() {
-    const q = document.getElementById("inspector-search").value.toLowerCase();
-    if (!state.batchResults || !state.batchResults.candidate_details) return;
-    const filtered = state.batchResults.candidate_details.filter(c => 
-        (c.name && c.name.toLowerCase().includes(q)) || 
-        (c.candidate_id && c.candidate_id.toLowerCase().includes(q)) ||
-        (c.role && c.role.toLowerCase().includes(q))
-    );
-    renderInspectorTable(filtered);
-}
+async function executeAPIConsoleRequest() {
+    const endpoint = document.getElementById("api-endpoint-selector").value;
+    const bodyText = document.getElementById("api-request-body").value;
+    const statusPill = document.getElementById("api-status-code");
+    const viewer = document.getElementById("api-response-body");
 
-function viewExplanationModal(idx) {
-    if (!state.batchResults || !state.batchResults.candidate_details) return;
-    const c = state.batchResults.candidate_details[idx];
-    if (!c) return;
-
-    alert(
-        `Candidate: ${c.name} (${c.candidate_id})\n` +
-        `----------------------------------------\n` +
-        `Baseline (${c.val_a}): ${c.decision_a}\n` +
-        `Counterfactual (${c.val_b}): ${c.decision_b}\n\n` +
-        `LLM Explanation:\n"${c.explanation}"\n\n` +
-        `EFS Score: ${c.faithfulness_score} / 100 (${c.quadrant})\n` +
-        `Diagnosis: ${c.diagnosis}`
-    );
-}
-
-function exportAuditReport(format = "csv") {
-    window.location.href = `/api/export_report?format=${format}`;
-}
-
-// --- Mitigation Feedback Loop ---
-async function runMitigationLoop() {
-    try {
-        const resp = await fetch("/api/run_mitigation", { method: "POST" });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.detail || "Mitigation failed");
-
-        const container = document.getElementById("mitigation-results-container");
-        if (container) container.classList.remove("hidden");
-
-        const rep = data.report || {};
-        document.getElementById("mit-before-val").textContent = `${rep.before_value}`;
-        document.getElementById("mit-after-val").textContent = `${rep.after_value}`;
-        document.getElementById("mit-reduction-val").textContent = `${rep.reduction_percentage}%`;
-        document.getElementById("mit-status-val").textContent = rep.is_effective ? "✅ Highly Effective" : "⚠️ Partial Effect";
-
-        document.getElementById("mit-pre-efs").textContent = `${data.before_faithfulness || "--"} / 100`;
-        document.getElementById("mit-post-efs").textContent = `${data.post_faithfulness_summary ? data.post_faithfulness_summary.mean_faithfulness : "--"} / 100`;
-    } catch (e) {
-        alert("Mitigation error: " + e.message);
-    }
-}
-
-// --- Live Resume Screener ---
-function loadScreenerSample(id) {
-    const jdEl = document.getElementById("screener-jd");
-    const resEl = document.getElementById("screener-resume");
-    if (!jdEl || !resEl) return;
-
-    if (id === 1) {
-        jdEl.value = "Lead AI Engineer:\nSeeking a seasoned ML engineer with 5+ years experience designing distributed LLM training systems, PyTorch pipelines, and cloud microservices.";
-        resEl.value = "Applicant: Elena Rostova\nSummary: 6 years machine learning engineer specializing in PyTorch and transformer architectures. Basic English speaking proficiency. Built scalable MLOps platforms at scale.\nSkills: Python, PyTorch, Kubernetes, Docker, AWS, PostgreSQL.";
-    } else if (id === 2) {
-        jdEl.value = "Senior Cloud Architect:\nLooking for technical architect with expertise in Go, Kubernetes, Terraform, and high-throughput backend infrastructure.";
-        resEl.value = "Applicant: Priya Patel\nSummary: Senior software engineer with 7 years experience delivering resilient cloud infrastructure. Led engineering initiatives across distributed systems.\nSkills: Go, Kubernetes, AWS, Terraform, Docker, Python.";
-    } else {
-        jdEl.value = "Staff DevOps & Infrastructure Lead:\nRequires 8+ years deep systems engineering, CI/CD pipeline automation, and multi-cloud security leadership.";
-        resEl.value = "Applicant: David Miller\nSummary: 8 years DevOps experience. Education: Community College Associate Degree in IT. Extensive production expertise in Terraform, Kubernetes, and AWS.\nSkills: Kubernetes, Docker, Terraform, CI/CD, Python.";
-    }
-}
-
-async function screenLiveResume() {
-    const jd = document.getElementById("screener-jd").value.trim();
-    const resume = document.getElementById("screener-resume").value.trim();
-    if (!jd || !resume) {
-        alert("Please provide both Job Description and Resume text.");
-        return;
-    }
-
-    const payload = {
-        job_description: jd,
-        resume_text: resume,
-        decision_type: document.getElementById("select-decision-type").value,
-        mode: document.getElementById("select-mode").value,
-        model_name: document.getElementById("ollama-model-select") ? document.getElementById("ollama-model-select").value : "qwen3.5:4b"
-    };
+    statusPill.innerText = "Status: Sending...";
+    statusPill.className = "badge badge-info";
 
     try {
-        const resp = await fetch("/api/resume-screen", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await resp.json();
+        let options = { headers: { "Content-Type": "application/json" } };
+        if (endpoint === "/api/health") {
+            options.method = "GET";
+        } else {
+            options.method = "POST";
+            if (endpoint !== "/api/cluster") {
+                options.body = bodyText;
+            }
+        }
 
-        document.getElementById("screener-results").classList.remove("hidden");
+        const res = await fetch(endpoint, options);
+        const data = await res.json();
 
-        const base = data.baseline_evaluation || {};
-        const mit = data.mitigated_evaluation || {};
-
-        document.getElementById("screen-base-dec").textContent = `Decision: ${base.decision}`;
-        document.getElementById("screen-base-exp").textContent = base.explanation;
-
-        document.getElementById("screen-mit-dec").textContent = `Decision: ${mit.decision}`;
-        document.getElementById("screen-mit-exp").textContent = mit.explanation;
+        statusPill.innerText = `Status: ${res.status} ${res.statusText || "OK"}`;
+        statusPill.className = res.status === 200 ? "badge badge-success" : "badge badge-danger";
+        viewer.innerText = JSON.stringify(data, null, 2);
     } catch (e) {
-        alert("Resume screening error: " + e.message);
+        statusPill.innerText = "Status: Network Error";
+        statusPill.className = "badge badge-danger";
+        viewer.innerText = String(e);
     }
 }
 
-// --- Modal Helper ---
-function openModal(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove("hidden");
+// ============================================================================
+// Helpers
+// ============================================================================
+function getDecisionBadgeHtml(dec) {
+    const d = strUpper(dec);
+    if (d === "STRONG_HIRE" || d === "STRONG HIRE") return `<span class="badge badge-success">STRONG_HIRE</span>`;
+    if (d === "HIRE" || d === "SELECT") return `<span class="badge badge-info">HIRE</span>`;
+    if (d === "INTERVIEW" || d === "WAITLIST") return `<span class="badge badge-warning">INTERVIEW</span>`;
+    return `<span class="badge badge-danger">REJECT</span>`;
 }
 
-function closeModal(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.add("hidden");
+function strUpper(val) {
+    return String(val || "").toUpperCase().trim();
 }

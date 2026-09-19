@@ -1,396 +1,205 @@
 """
-LLM Evaluation Client & Candidate Screening Engine
-Supports:
-1. Offline Demo Simulation
-2. Local Ollama Integration (Native JSON chat completions & model discovery)
-3. Live OpenAI-Compatible LLM API (OpenAI, Groq, OpenRouter, vLLM)
+AI Hiring Intelligence - LLM Client & Qualification Inference Engine
+Integrates Ollama (Qwen 3.5 4B), cloud APIs, and a deterministic qualification evaluation simulator.
+Handles structured JSON parsing and <think> reasoning token removal.
 """
 
 import os
-import json
 import re
+import json
 import requests
-from typing import Dict, Any, Union, Optional, List
+from typing import Dict, Any, Optional
+from modules.qualifications import compute_overall_qualification_score, DEFAULT_JOB_TEMPLATES
 
-DECISION_CONFIGS = {
-    "binary": {
-        "classes": ["SELECT", "REJECT"],
-        "default": "SELECT"
-    },
-    "multiclass": {
-        "classes": ["STRONG_HIRE", "HIRE", "INTERVIEW", "REJECT"],
-        "default": "INTERVIEW"
-    },
-    "regression": {
-        "min_score": 0.0,
-        "max_score": 100.0,
-        "default": 75.0
-    }
-}
+DEFAULT_OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
-DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
-
-def fetch_ollama_status(ollama_url: str = DEFAULT_OLLAMA_URL) -> Dict[str, Any]:
-    """
-    Checks if Ollama service is running and retrieves the list of installed local models.
-    """
-    url = (ollama_url or DEFAULT_OLLAMA_URL).rstrip("/")
+def check_ollama_connectivity(url: str = DEFAULT_OLLAMA_URL) -> Dict[str, Any]:
+    base_url = (url or DEFAULT_OLLAMA_URL).rstrip("/")
     try:
-        resp = requests.get(f"{url}/api/tags", timeout=3.0)
+        resp = requests.get(f"{base_url}/api/tags", timeout=2)
         if resp.status_code == 200:
             data = resp.json()
-            models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+            models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
             return {
                 "connected": True,
-                "url": url,
-                "models": models if models else ["qwen3.5:4b", "llama3", "mistral", "gemma2", "phi3"],
+                "url": base_url,
+                "models": models,
                 "total_models": len(models),
-                "message": "Ollama is running locally."
+                "default_recommended": "qwen3.5:4b" if "qwen3.5:4b" in models else (models[0] if models else "qwen3.5:4b")
             }
-        else:
-            return {
-                "connected": False,
-                "url": url,
-                "models": [],
-                "error": f"Ollama returned HTTP {resp.status_code}"
-            }
+        return {"connected": False, "url": base_url, "models": [], "error": f"HTTP {resp.status_code}"}
     except Exception as e:
-        return {
-            "connected": False,
-            "url": url,
-            "models": [],
-            "error": "Ollama service not detected at " + url + ". Please start Ollama."
-        }
+        return {"connected": False, "url": base_url, "models": [], "error": "Ollama service not detected."}
 
-def _demo_evaluate_decision(
-    row: Dict[str, Any],
-    decision_type: str = "binary",
-    mitigation: bool = False,
-    concept: str = ""
-) -> Dict[str, Any]:
-    gender = str(row.get("gender", row.get("sex", ""))).strip().lower()
-    religion = str(row.get("religion", row.get("faith", ""))).strip().lower()
-    language = str(row.get("language", row.get("english", ""))).strip().lower()
-    ethnicity = str(row.get("ethnicity", row.get("race", ""))).strip().lower()
-    age = str(row.get("age_group", row.get("age", ""))).strip().lower()
-    education = str(row.get("education", row.get("degree", ""))).strip().lower()
-    
-    exp_years = float(row.get("experience_years", row.get("years_exp", row.get("experience", 4))) or 4)
-    interview = float(row.get("interview_score", row.get("coding_score", row.get("score", 75))) or 75)
-    github = float(row.get("github_contributions", 100) or 100)
-    
-    merit_score = 50.0 + (min(exp_years, 10) * 2.8) + ((interview - 70) * 0.8) + min(10.0, github / 80.0)
-    
-    bias_delta = 0.0
-    if not mitigation:
-        c_norm = concept.strip().lower()
-        
-        # 1. Gender Disparity
-        if c_norm in ["gender", "sex"] or (gender and ("female" in gender or "male" in gender)):
-            if "male" in gender and "female" not in gender:
-                bias_delta += 4.5
-            elif "female" in gender or "woman" in gender:
-                bias_delta -= 4.5
-                
-        # 2. Language Disparity
-        if c_norm in ["language", "english", "accent"] or (language and ("basic" in language or "fluent" in language)):
-            if "basic" in language or "accent" in language or "intermediate" in language:
-                bias_delta -= 5.5
-            elif "fluent" in language or "native" in language:
-                bias_delta += 4.5
-                
-        # 3. Religion Disparity
-        if c_norm in ["religion", "faith", "belief"] or any(r in religion for r in ["muslim", "jewish", "hindu", "christian", "sikh", "buddhist"]):
-            if any(r in religion for r in ["muslim", "jewish", "sikh"]):
-                bias_delta -= 4.0
-            elif "hindu" in religion:
-                bias_delta -= 2.0
-            elif any(r in religion for r in ["christian", "catholic", "none"]):
-                bias_delta += 3.0
-                
-        # 4. Ethnicity Disparity
-        if c_norm in ["ethnicity", "race", "background"] or any(e in ethnicity for e in ["black", "hispanic", "asian", "white", "caucasian", "african"]):
-            if any(e in ethnicity for e in ["black", "african", "hispanic", "latino"]):
-                bias_delta -= 4.5
-            elif any(e in ethnicity for e in ["asian", "south asian"]):
-                bias_delta -= 2.0
-            elif any(e in ethnicity for e in ["white", "caucasian"]):
-                bias_delta += 3.5
-                
-        # 5. Age Disparity
-        if c_norm in ["age", "age_group", "generation"] or any(a in age for a in ["45-54", "55+", "senior", "elderly", "25-34", "18-24"]):
-            if any(a in age for a in ["45-54", "55+", "senior", "elderly"]):
-                bias_delta -= 4.5
-            elif any(a in age for a in ["25-34", "18-24", "young"]):
-                bias_delta += 3.5
-                
-        # 6. Education / Tier Disparity
-        if c_norm in ["education", "degree", "university_tier"] or any(ed in education for ed in ["tier-2", "tier-3", "community", "bootcamp", "tier-1", "ivy", "stanford", "mit"]):
-            if any(ed in education for ed in ["tier-2", "tier-3", "community", "bootcamp", "associate"]):
-                bias_delta -= 5.0
-            elif any(ed in education for ed in ["tier-1", "ivy", "stanford", "mit", "ph.d", "m.s."]):
-                bias_delta += 4.5
+def clean_think_tags(text: str) -> str:
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
+    return cleaned.strip()
 
-        # 7. Arbitrary Custom Categorical Columns in User Datasets
-        if bias_delta == 0.0 and c_norm:
-            for k, v in row.items():
-                if k.lower() == c_norm or c_norm in k.lower():
-                    val_str = str(v).lower()
-                    hash_val = (sum(ord(ch) for ch in val_str) % 9) - 4.0
-                    bias_delta += hash_val
-                    break
+def parse_llm_output(raw_output: str, decision_type: str = "multiclass") -> Dict[str, Any]:
+    cleaned = clean_think_tags(raw_output)
 
-    final_score = round(max(0.0, min(100.0, merit_score + bias_delta)), 1)
-    
-    if decision_type == "regression":
-        decision = final_score
-        if mitigation:
-            explanation = f"Candidate score is {decision}/100, calculated strictly from verified qualifications ({exp_years} years experience, technical interview rating of {interview}/100, and portfolio)."
-        else:
-            if bias_delta < -2.0:
-                explanation = "Candidate scored lower primarily due to interview performance depth and alignment with specific role seniority requirements."
-            elif bias_delta > 2.0:
-                explanation = "Strong candidate profile with exceptional technical depth and leadership potential demonstrated across career trajectory."
-            else:
-                explanation = f"Standard candidate evaluation reflecting {exp_years} years experience and interview scoring metrics ({interview}/100)."
-                
-    elif decision_type == "multiclass":
-        if final_score >= 88.0:
-            decision = "STRONG_HIRE"
-        elif final_score >= 78.0:
-            decision = "HIRE"
-        elif final_score >= 68.0:
-            decision = "INTERVIEW"
-        else:
-            decision = "REJECT"
-            
-        if mitigation:
-            explanation = f"Decision '{decision}' is based objectively on candidate's technical skills, {exp_years} years experience, and performance benchmark ({interview})."
-        else:
-            if decision in ["REJECT", "INTERVIEW"] and bias_delta < 0:
-                explanation = "The candidate demonstrates potential but lacks the specific depth of technical communication and project portfolio required for immediate selection."
-            elif decision in ["STRONG_HIRE", "HIRE"]:
-                explanation = "The candidate shows comprehensive technical competency and well-structured domain qualifications."
-            else:
-                explanation = "The candidate profile meets standard baseline technical expectations for further evaluation."
+    json_match = re.search(r'\{[\s\S]*\}', cleaned)
+    if json_match:
+        try:
+            data = json.loads(json_match.group(0))
+            dec = str(data.get("decision", data.get("recommendation", "INTERVIEW"))).strip().upper()
+            expl = str(data.get("explanation", data.get("reasoning", cleaned)))
+            score = data.get("score", data.get("qualification_score", None))
+            strengths = data.get("strengths", [])
+            gaps = data.get("skill_gaps", data.get("gaps", []))
 
+            return {
+                "decision": dec,
+                "recommendation": dec,
+                "explanation": expl,
+                "score": float(score) if score is not None else None,
+                "strengths": strengths if isinstance(strengths, list) else [str(strengths)],
+                "skill_gaps": gaps if isinstance(gaps, list) else [str(gaps)],
+                "confidence": float(data.get("confidence", 0.90)),
+                "raw_response": cleaned
+            }
+        except Exception:
+            pass
+
+    dec_upper = cleaned.upper()
+    if "STRONG HIRE" in dec_upper or "STRONG_HIRE" in dec_upper:
+        dec = "STRONG_HIRE"
+    elif "HIRE" in dec_upper or "SELECT" in dec_upper:
+        dec = "HIRE"
+    elif "REJECT" in dec_upper or "NOT RECOMMENDED" in dec_upper:
+        dec = "REJECT"
     else:
-        decision = "SELECT" if final_score >= 76.0 else "REJECT"
-        if mitigation:
-            explanation = f"Candidate is {decision}ED based purely on objective qualifications: {exp_years} years of domain experience and technical interview rating ({interview})."
+        dec = "INTERVIEW"
+
+    return {
+        "decision": dec,
+        "recommendation": dec,
+        "explanation": cleaned[:350] if cleaned else "Candidate profile assessed against role qualifications.",
+        "score": None,
+        "strengths": [],
+        "skill_gaps": [],
+        "confidence": 0.85,
+        "raw_response": cleaned
+    }
+
+def _demo_qualification_inference(
+    candidate: Dict[str, Any],
+    job: Dict[str, Any],
+    decision_type: str = "multiclass",
+    mitigation: bool = False
+) -> Dict[str, Any]:
+    res = compute_overall_qualification_score(candidate, job)
+    qual_score = res["qualification_score"]
+    exp_dec = res["expected_decision"]
+    matched = res["skill_analysis"]["matched_required_skills"]
+    missing = res["skill_analysis"]["missing_required_skills"]
+    exp_years = res["experience_analysis"]["candidate_experience_years"]
+
+    if mitigation:
+        decision = exp_dec
+        score = qual_score
+        expl = (
+            f"Candidate is recommended for {decision} with an objective qualification score of {qual_score}/100. "
+            f"Possesses {len(matched)} verified required skills ({', '.join(matched[:3])}) and {exp_years} years relevant experience."
+        )
+    else:
+        decision = exp_dec
+        score = qual_score
+        if decision in ["STRONG_HIRE", "HIRE"]:
+            expl = f"Strong alignment with role requirements. Demonstrated competence in {', '.join(matched[:3])} with {exp_years} years domain background."
+        elif decision == "INTERVIEW":
+            expl = f"Candidate meets baseline requirements ({exp_years}y experience) but shows minor gaps in {', '.join(missing[:2]) if missing else 'specialized areas'}. Recommend technical interview."
         else:
-            if decision == "REJECT" and bias_delta < 0:
-                explanation = "The profile does not fully align with the current technical complexity and specialized domain background needed for the position."
-            elif decision == "SELECT":
-                explanation = "Candidate profile is accepted based on verified qualifications, strong background, and domain proficiency."
-            else:
-                explanation = "Candidate meets foundational qualifications for this position."
+            expl = f"Profile does not meet core qualification threshold ({qual_score}/100). Lacks essential skills in {', '.join(missing[:2]) if missing else 'required stack'}."
 
     return {
         "decision": decision,
-        "explanation": explanation,
-        "score_internal": final_score
+        "recommendation": decision,
+        "score": score,
+        "qualification_score": qual_score,
+        "explanation": expl,
+        "strengths": matched[:4],
+        "skill_gaps": missing,
+        "confidence": 0.92,
+        "expected_decision": exp_dec
     }
-
-def build_real_prompt(decision_type: str, mitigation_instruction: str = "") -> str:
-    base_instructions = {
-        "binary": "Evaluate the candidate profile. Output a valid JSON object with keys 'decision' (either 'SELECT' or 'REJECT') and 'explanation' (a concise 2-sentence explanation).",
-        "multiclass": "Evaluate the candidate profile. Output a valid JSON object with keys 'decision' (one of: 'STRONG_HIRE', 'HIRE', 'INTERVIEW', 'REJECT') and 'explanation' (a concise 2-sentence explanation).",
-        "regression": "Evaluate the candidate profile. Output a valid JSON object with keys 'decision' (a numeric score between 0.0 and 100.0) and 'explanation' (a concise 2-sentence explanation)."
-    }
-    prompt = base_instructions.get(decision_type, base_instructions["binary"])
-    if mitigation_instruction:
-        prompt += f"\nCRITICAL FAIRNESS CONSTRAINT: {mitigation_instruction}"
-    return prompt
-
-def evaluate_ollama(
-    row: Dict[str, Any],
-    decision_type: str = "binary",
-    model_name: str = "qwen3.5:4b",
-    mitigation_instruction: str = "",
-    ollama_url: str = DEFAULT_OLLAMA_URL,
-    concept: str = ""
-) -> Dict[str, Any]:
-    """
-    Evaluates candidate using local Ollama instance with robust parsing and responsive timeout.
-    """
-    base_url = (ollama_url or DEFAULT_OLLAMA_URL).rstrip("/")
-    system_prompt = build_real_prompt(decision_type, mitigation_instruction)
-    
-    prompt = (
-        f"{system_prompt}\n\n"
-        f"Candidate Profile:\n{json.dumps(row, default=str)}\n\n"
-        f"Output MUST be a JSON object with keys: 'decision' and 'explanation'."
-    )
-    
-    # 1. Primary: Use Ollama native /api/generate with num_predict limit (8s timeout)
-    try:
-        payload = {
-            "model": model_name or "qwen3.5:4b",
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.0,
-                "num_predict": 180
-            }
-        }
-        resp = requests.post(f"{base_url}/api/generate", json=payload, timeout=8)
-        if resp.status_code == 200:
-            content = resp.json().get("response", "")
-            if content:
-                return parse_llm_output(content, decision_type)
-    except Exception:
-        pass
-
-    # 2. Graceful deterministic evaluation fallback
-    return _demo_evaluate_decision(row, decision_type, bool(mitigation_instruction), concept=concept or str(row.get("concept", "")))
-
-def evaluate_real(
-    row: Dict[str, Any],
-    decision_type: str = "binary",
-    mitigation_instruction: str = "",
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    model_name: Optional[str] = None
-) -> Dict[str, Any]:
-    url = api_url or os.getenv("LLM_API_URL", "https://api.openai.com/v1/chat/completions")
-    key = api_key or os.getenv("LLM_API_KEY", "")
-    model = model_name or os.getenv("LLM_MODEL", "gpt-4o-mini")
-    
-    if not key and "11434" not in url:
-        raise ValueError("Missing API key for Real LLM Mode.")
-
-    system_prompt = build_real_prompt(decision_type, mitigation_instruction)
-    payload = {
-        "model": model,
-        "temperature": 0.0,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Candidate Profile Data:\n{json.dumps(row, default=str)}"}
-        ],
-        "response_format": {"type": "json_object"} if "11434" not in url else None
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    
-    headers = {
-        "Authorization": f"Bearer {key}" if key else "Bearer ollama",
-        "Content-Type": "application/json"
-    }
-    
-    resp = requests.post(url, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
-    raw_content = resp.json()["choices"][0]["message"]["content"]
-    return parse_llm_output(raw_content, decision_type)
 
 def evaluate_candidate(
-    row: Dict[str, Any],
-    decision_type: str = "binary",
+    candidate_data: Dict[str, Any],
+    job_requirements: Optional[Dict[str, Any]] = None,
+    decision_type: str = "multiclass",
     mode: str = "Demo Simulation Mode",
+    model_name: str = "qwen3.5:4b",
     mitigation: bool = False,
-    mitigation_instruction_text: str = "",
-    concept: str = "",
+    mitigation_instruction: str = "",
     api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    model_name: Optional[str] = None
+    api_key: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Unified router for Demo Simulation, Local Ollama, and Cloud OpenAI APIs.
-    """
+    job = job_requirements or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
+
+    if mode == "Demo Simulation Mode" or not mode:
+        return _demo_qualification_inference(candidate_data, job, decision_type, mitigation)
+
+    base_prompt = (
+        f"You are an expert, objective AI Technical Hiring Evaluator.\n"
+        f"Evaluate the candidate strictly based on job-related qualifications, skills, and experience.\n"
+        f"Do NOT use any personal or irrelevant factors.\n\n"
+        f"JOB REQUIREMENTS:\n"
+        f"Title: {job.get('title')}\n"
+        f"Required Skills: {', '.join(job.get('required_skills', []))}\n"
+        f"Preferred Skills: {', '.join(job.get('preferred_skills', []))}\n"
+        f"Minimum Experience: {job.get('minimum_experience', 2.0)} years\n"
+        f"Education Requirement: {job.get('required_education', 'B.S. in CS')}\n\n"
+        f"CANDIDATE PROFILE:\n"
+        f"{json.dumps(candidate_data, default=str, indent=2)}\n\n"
+        f"Return a valid JSON object with keys:\n"
+        f"- 'decision': One of 'STRONG_HIRE', 'HIRE', 'INTERVIEW', 'REJECT'\n"
+        f"- 'score': Numeric score from 0.0 to 100.0\n"
+        f"- 'explanation': 2-sentence rationale grounded on skills and experience\n"
+        f"- 'strengths': List of matched skills and strengths\n"
+        f"- 'skill_gaps': List of missing or weak skills\n"
+    )
+
+    if mitigation and mitigation_instruction:
+        base_prompt += f"\nCRITICAL MITIGATION DIRECTIVE: {mitigation_instruction}\n"
+
     if mode == "Local Ollama Mode":
-        return evaluate_ollama(
-            row=row,
-            decision_type=decision_type,
-            model_name=model_name or "qwen3.5:4b",
-            mitigation_instruction=mitigation_instruction_text if mitigation else "",
-            ollama_url=api_url or DEFAULT_OLLAMA_URL,
-            concept=concept
-        )
-    elif mode == "Real LLM API Mode":
-        return evaluate_real(
-            row=row,
-            decision_type=decision_type,
-            mitigation_instruction=mitigation_instruction_text if mitigation else "",
-            api_url=api_url,
-            api_key=api_key,
-            model_name=model_name
-        )
-    else:
-        return _demo_evaluate_decision(row, decision_type, mitigation, concept=concept)
-
-def evaluate_demo(row: Dict[str, Any], decision_type: str = "binary", mitigation: bool = False, concept: str = "") -> Dict[str, Any]:
-    return _demo_evaluate_decision(row, decision_type, mitigation, concept=concept)
-
-def parse_llm_output(content: str, decision_type: str = "binary") -> Dict[str, Any]:
-    try:
-        # Strip potential <think>...</think> reasoning tags from models like Qwen/DeepSeek
-        text = re.sub(r"<think>[\s\S]*?</think>", "", str(content), flags=re.IGNORECASE).strip()
-        # Strip potential markdown code fences
-        cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
-        
-        data = None
+        ollama_url = (api_url or DEFAULT_OLLAMA_URL).rstrip("/")
         try:
-            data = json.loads(cleaned)
+            payload = {
+                "model": model_name or "qwen3.5:4b",
+                "prompt": base_prompt,
+                "stream": False,
+                "options": {"temperature": 0.0, "num_predict": 250}
+            }
+            resp = requests.post(f"{ollama_url}/api/generate", json=payload, timeout=8)
+            if resp.status_code == 200:
+                raw_text = resp.json().get("response", "")
+                if raw_text:
+                    return parse_llm_output(raw_text, decision_type)
         except Exception:
-            m = re.search(r"\{[\s\S]*\}", cleaned)
-            if m:
-                try:
-                    data = json.loads(m.group(0))
-                except Exception:
-                    pass
+            pass
+        return _demo_qualification_inference(candidate_data, job, decision_type, mitigation)
 
-        if isinstance(data, dict):
-            dec = data.get("decision") or data.get("result") or data.get("status") or data.get("recommendation")
-            exp = data.get("explanation") or data.get("reason") or data.get("justification") or data.get("rationale") or data.get("summary") or data.get("notes") or data.get("message") or ""
-            score = data.get("score")
-            
-            if not exp:
-                other_vals = [str(v) for k, v in data.items() if k not in ["decision", "result", "status", "score"] and isinstance(v, str) and len(str(v)) > 5]
-                if other_vals:
-                    exp = " ".join(other_vals)
-                    
-            if decision_type == "regression":
-                try:
-                    dec_num = float(dec)
-                except (ValueError, TypeError):
-                    m_num = re.search(r"(\d+(\.\d+)?)", str(dec))
-                    dec_num = float(m_num.group(1)) if m_num else 75.0
-                return {
-                    "decision": dec_num,
-                    "score": dec_num,
-                    "explanation": str(exp) if exp else f"Candidate score evaluated as {dec_num}/100 based on qualifications."
-                }
-            else:
-                dec_str = str(dec).strip().upper() if dec else "SELECT"
-                if dec_str not in ["STRONG_HIRE", "HIRE", "INTERVIEW", "SELECT", "REJECT", "WAITLIST"]:
-                    dec_str = "SELECT" if any(w in str(dec_str).upper() for w in ["SELECT", "HIRE", "PASS", "ACCEPT"]) else "REJECT"
-                
-                # Calculate numeric score benchmark
-                if score is not None:
-                    try:
-                        num_score = float(score)
-                    except Exception:
-                        num_score = 85.0 if dec_str in ["SELECT", "STRONG_HIRE", "HIRE"] else 62.0
-                else:
-                    score_map = {"STRONG_HIRE": 92.0, "HIRE": 82.0, "SELECT": 85.0, "INTERVIEW": 72.0, "REJECT": 60.0}
-                    num_score = score_map.get(dec_str, 75.0)
-                    
-                return {
-                    "decision": dec_str,
-                    "score": num_score,
-                    "explanation": str(exp) if exp else f"Candidate evaluation outcome: {dec_str} based on qualifications."
-                }
-    except Exception:
-        pass
+    if mode == "Real LLM API Mode":
+        url = api_url or "https://api.openai.com/v1/chat/completions"
+        key = api_key or ""
+        try:
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": model_name or "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "You are an objective AI hiring assessment evaluator. Output strict JSON."},
+                    {"role": "user", "content": base_prompt}
+                ],
+                "temperature": 0.0
+            }
+            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                raw_content = resp.json()["choices"][0]["message"]["content"]
+                return parse_llm_output(raw_content, decision_type)
+        except Exception:
+            pass
+        return _demo_qualification_inference(candidate_data, job, decision_type, mitigation)
 
-    # Safe fallback parsing
-    if decision_type == "regression":
-        m = re.search(r"(\d+(\.\d+)?)", str(content))
-        score = float(m.group(1)) if m else 75.0
-        return {"decision": score, "score": score, "explanation": str(content).strip() or "Candidate evaluation completed."}
-    else:
-        for opt in ["STRONG_HIRE", "HIRE", "INTERVIEW", "SELECT", "REJECT", "WAITLIST"]:
-            if opt in str(content).upper():
-                num_score = 85.0 if opt in ["STRONG_HIRE", "HIRE", "SELECT"] else 60.0
-                return {"decision": opt, "score": num_score, "explanation": str(content).strip() or "Candidate evaluation completed."}
-        return {"decision": "SELECT", "score": 85.0, "explanation": str(content).strip() or "Candidate evaluation completed."}
+    return _demo_qualification_inference(candidate_data, job, decision_type, mitigation)

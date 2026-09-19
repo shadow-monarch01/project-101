@@ -1,0 +1,4 @@
+candidate_id,name,role,expected_role,experience_years,skills,education,degree,certifications,certifications_count,projects,interview_score,previous_salary
+OPS_001,Marcus Vance,Senior DevOps Engineer,Cloud DevOps & Platform Engineer,5.5,AWS; Terraform; Docker; Kubernetes; CI/CD; Linux; Prometheus; Python,B.Tech Computer Science,B.Tech,AWS Solutions Architect Professional; CKA,2,Multi-Region Terraform Infrastructure; Automated Zero-Downtime Pipeline,92.0,135000
+OPS_002,Chloe Chen,Cloud Engineer,Cloud DevOps & Platform Engineer,3.0,AWS; Docker; CI/CD; Linux; Bash; Git,B.S. Information Systems,B.S.,AWS Certified SysOps,1,Container Migration; Jenkins Automated Build Cluster,84.0,105000
+OPS_003,Liam O'Connor,Junior Infrastructure Admin,Cloud DevOps & Platform Engineer,1.0,Linux; Bash; Git; Docker (Basic),Associate Degree in Network Administration,Associate,CompTIA Linux+,1,Internal Server Monitoring Script; Backup Automation,65.0,58000

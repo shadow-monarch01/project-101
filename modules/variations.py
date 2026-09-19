@@ -1,164 +1,134 @@
 """
-Counterfactual Perturbation Module
-Creates controlled paired candidate inputs isolating sensitive demographic attributes across any user dataset.
+AI Hiring Intelligence - Qualification Counterfactual Engine
+Generates controlled, job-relevant qualification perturbations (Skills, Experience, Education, Certifications)
+while holding all unrelated candidate attributes strictly invariant to audit AI causal responsiveness.
 """
 
-import pandas as pd
-from typing import Dict, Any, List, Optional, Tuple
+import copy
+from typing import Dict, List, Any, Optional
+from modules.qualifications import parse_skills_list
 
-CONCEPT_COLUMN_MAP = {
-    "gender": ["gender", "sex"],
-    "religion": ["religion", "faith", "belief", "creed"],
-    "language": ["language", "english", "language proficiency", "english proficiency", "accent"],
-    "ethnicity": ["ethnicity", "race", "background", "caste", "nationality", "origin"],
-    "age": ["age_group", "age", "generation", "age_bracket"],
-    "education": ["education", "degree", "education_level"],
-    "university_tier": ["university_tier", "tier", "college_tier", "institution_tier"],
-    "location": ["location", "city", "region", "country", "state"]
-}
+QUALIFICATION_CONCEPTS = [
+    {
+        "id": "skills",
+        "name": "Technical Skills",
+        "description": "Add, remove, or substitute required technical skills",
+        "type": "categorical_list",
+        "options": ["Remove Core Skill", "Add Preferred Skill", "Minimal Skillset", "Mastery Skillset"]
+    },
+    {
+        "id": "experience_years",
+        "name": "Years of Experience",
+        "description": "Adjust professional domain experience",
+        "type": "numeric",
+        "options": ["1.0", "2.0", "4.0", "6.0", "8.0", "12.0"]
+    },
+    {
+        "id": "education",
+        "name": "Education / Degree Level",
+        "description": "Alter educational background or degree relevance",
+        "type": "categorical",
+        "options": ["M.S. Software Engineering", "B.Tech Computer Science", "B.S. Information Systems", "Associate Degree", "Bootcamp Certificate"]
+    },
+    {
+        "id": "certifications_count",
+        "name": "Professional Certifications",
+        "description": "Change number and level of domain certifications",
+        "type": "numeric",
+        "options": ["0", "1", "2", "3", "4"]
+    },
+    {
+        "id": "interview_score",
+        "name": "Technical Interview Rating",
+        "description": "Modify technical assessment benchmark score",
+        "type": "numeric",
+        "options": ["60", "70", "80", "88", "95"]
+    }
+]
 
-DEFAULT_PAIRS = {
-    "gender": ("Male", "Female"),
-    "religion": ("Hindu", "Christian"),
-    "language": ("Fluent", "Basic"),
-    "ethnicity": ("Asian", "White"),
-    "age": ("25-34", "35-44"),
-    "education": ("B.Tech Computer Science", "M.S. Computer Science"),
-    "university_tier": ("Tier-2 Regional", "Tier-1 Elite"),
-    "location": ("Metropolitan", "Rural")
-}
+def get_available_qualification_concepts() -> List[Dict[str, Any]]:
+    return QUALIFICATION_CONCEPTS
 
-def get_all_dataset_concepts(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """
-    Intelligently discovers all candidate demographic / categorical columns in any user dataset.
-    """
-    concepts = []
-    seen_cols = set()
-
-    # 1. Match known standard concepts first if present
-    df_cols_lower = {col.lower(): col for col in df.columns}
-    for concept_id, candidate_names in CONCEPT_COLUMN_MAP.items():
-        for cand in candidate_names:
-            if cand in df_cols_lower:
-                actual_col = df_cols_lower[cand]
-                vals = get_available_values(df, actual_col)
-                if len(vals) >= 2 and actual_col not in seen_cols:
-                    concepts.append({
-                        "id": concept_id,
-                        "display_name": f"{actual_col.replace('_', ' ').title()} ({len(vals)} groups)",
-                        "column": actual_col,
-                        "values": vals[:15]
-                    })
-                    seen_cols.add(actual_col)
-                break
-
-    # 2. Add any other categorical/string columns in user's dataset with 2 to 25 unique values
-    for col in df.columns:
-        if col in seen_cols:
-            continue
-        c_lower = col.lower()
-        if c_lower in ["candidate_id", "id", "name", "candidate_name", "interview_score", "score", "experience_years", "salary", "cluster", "technical_skills", "skills"]:
-            continue
-        
-        vals = get_available_values(df, col)
-        if 2 <= len(vals) <= 25:
-            concepts.append({
-                "id": col.lower().replace(" ", "_"),
-                "display_name": f"{col.replace('_', ' ').title()} (Custom: {len(vals)} groups)",
-                "column": col,
-                "values": vals
-            })
-            seen_cols.add(col)
-
-    # Fallback to gender if empty
-    if not concepts:
-        concepts.append({
-            "id": "gender",
-            "display_name": "Gender (Male vs Female)",
-            "column": "gender" if "gender" in df.columns else df.columns[0],
-            "values": ["Male", "Female"]
-        })
-
-    return concepts
-
-def resolve_column_for_concept(df: pd.DataFrame, concept: str) -> Optional[str]:
-    c_lower = concept.strip().lower()
-    df_cols_lower = {col.lower(): col for col in df.columns}
-    
-    # Direct column match
-    if c_lower in df_cols_lower:
-        return df_cols_lower[c_lower]
-
-    # Map match
-    candidate_cols = CONCEPT_COLUMN_MAP.get(c_lower, [c_lower])
-    for cand in candidate_cols:
-        if cand in df_cols_lower:
-            return df_cols_lower[cand]
-
-    # Fuzzy match
-    for col in df.columns:
-        if c_lower in col.lower() or col.lower() in c_lower:
-            return col
-
-    return None
-
-def get_available_values(df: pd.DataFrame, column: str) -> List[str]:
-    if column not in df.columns:
-        return []
-    vals = df[column].dropna().astype(str).unique().tolist()
-    clean = [v.strip() for v in vals if v.strip() and v.strip().lower() != "nan"]
-    return sorted(list(set(clean)))
-
-def default_pair(df: pd.DataFrame, concept: str) -> Optional[Tuple[str, str, str]]:
-    column = resolve_column_for_concept(df, concept)
-    if not column:
-        return None
-    
-    vals = get_available_values(df, column)
-    if len(vals) >= 2:
-        return column, vals[0], vals[1]
-    
-    c_lower = concept.strip().lower()
-    if c_lower in DEFAULT_PAIRS:
-        val_a, val_b = DEFAULT_PAIRS[c_lower]
-        return column, val_a, val_b
-    return None
-
-def make_variation(row: Union[pd.Series, Dict[str, Any]], concept: str, value: str, column: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    if isinstance(row, pd.Series):
-        new_row = row.to_dict()
-    else:
-        new_row = dict(row)
-
-    df_dummy = pd.DataFrame([new_row])
-    col = column or resolve_column_for_concept(df_dummy, concept)
-    if not col or col not in new_row:
-        # Fallback to direct key
-        col = concept.lower()
-        if col not in new_row:
-            new_row[col] = value
-            return new_row, None
-            
-    new_row[col] = value
-    return new_row, None
-
-def generate_counterfactual_dataset(
-    df: pd.DataFrame,
+def make_qualification_variation(
+    candidate: Dict[str, Any],
     concept: str,
-    value_a: str,
-    value_b: str,
-    column: Optional[str] = None
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    col = column or resolve_column_for_concept(df, concept)
-    if not col or col not in df.columns:
-        raise ValueError(f"Could not resolve valid dataset column for concept '{concept}' in dataset.")
+    target_value: Any,
+    job_requirements: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    twin = copy.deepcopy(candidate)
+    concept_lower = str(concept).strip().lower()
 
-    rows_a, rows_b = [], []
-    for _, row in df.iterrows():
-        a, err_a = make_variation(row, concept, value_a, col)
-        b, err_b = make_variation(row, concept, value_b, col)
-        if a is not None and b is not None:
-            rows_a.append(a)
-            rows_b.append(b)
+    if concept_lower in ["skills", "technical_skills", "skill"]:
+        skills = parse_skills_list(candidate.get("skills", candidate.get("technical_skills", [])))
+        t_val = str(target_value).strip()
 
-    return rows_a, rows_b
+        if t_val == "Remove Core Skill":
+            if skills:
+                skills = skills[1:]
+        elif t_val == "Add Preferred Skill":
+            pref_list = ["FastAPI", "Docker", "Kubernetes", "GraphQL", "AWS", "Machine Learning"]
+            for p in pref_list:
+                if p.lower() not in [s.lower() for s in skills]:
+                    skills.append(p)
+                    break
+        elif t_val == "Minimal Skillset":
+            skills = skills[:1] if skills else ["Git"]
+        elif t_val == "Mastery Skillset":
+            skills = list(set(skills + ["Python", "SQL", "Docker", "Kubernetes", "PostgreSQL", "FastAPI", "CI/CD"]))
+        else:
+            skills = parse_skills_list(t_val) if t_val else skills
+
+        twin["skills"] = "; ".join(skills)
+        twin["technical_skills"] = "; ".join(skills)
+
+    elif concept_lower in ["experience_years", "experience", "years_exp"]:
+        try:
+            twin["experience_years"] = float(target_value)
+        except (ValueError, TypeError):
+            twin["experience_years"] = candidate.get("experience_years", 3.0)
+
+    elif concept_lower in ["education", "degree", "education_level"]:
+        twin["education"] = str(target_value)
+        twin["degree"] = str(target_value)
+
+    elif concept_lower in ["certifications", "certifications_count", "certs"]:
+        try:
+            val = int(target_value)
+            twin["certifications_count"] = val
+            twin["certifications"] = [f"Cert #{i+1}" for i in range(val)] if val > 0 else []
+        except (ValueError, TypeError):
+            twin["certifications_count"] = 0
+            twin["certifications"] = []
+
+    elif concept_lower in ["interview_score", "score", "coding_score"]:
+        try:
+            twin["interview_score"] = float(target_value)
+        except (ValueError, TypeError):
+            twin["interview_score"] = candidate.get("interview_score", 75.0)
+
+    else:
+        twin[concept] = target_value
+
+    return twin
+
+def generate_counterfactual_pair(
+    candidate: Dict[str, Any],
+    concept: str,
+    target_value: Any,
+    job_requirements: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    twin = make_qualification_variation(candidate, concept, target_value, job_requirements)
+    invariance_report = {}
+    ignored_keys = {"skills", "technical_skills", concept}
+    for k, v in candidate.items():
+        if k not in ignored_keys:
+            invariance_report[k] = (twin.get(k) == v)
+
+    return {
+        "original_candidate": candidate,
+        "counterfactual_candidate": twin,
+        "perturbation_concept": concept,
+        "target_value": target_value,
+        "all_other_attributes_invariant": all(invariance_report.values()) if invariance_report else True,
+        "invariance_details": invariance_report
+    }

@@ -1,0 +1,3 @@
+candidate_id,name,role,expected_role,experience_years,skills,education,degree,certifications,certifications_count,projects,interview_score,previous_salary
+DS_001,Dr. Sophia Lindqvist,Senior Data Scientist,Data Scientist & Machine Learning Engineer,6.0,Python; Machine Learning; SQL; Pandas; Scikit-learn; PyTorch; NLP; Deep Learning,Ph.D. in Computational Statistics,Ph.D.,TensorFlow Developer Certificate,1,Customer Churn Prediction Neural Network; LLM Fine-Tuning Pipeline,95.0,150000
+DS_002,Rohan Mehta,Machine Learning Engineer,Data Scientist & Machine Learning Engineer,3.5,Python; Machine Learning; SQL; Pandas; Scikit-learn; Docker; FastAPI,M.S. in Data Science,M.S.,Azure Data Scientist Associate,1,Recommendation Engine Microservice; Automated Feature Store,87.0,115000
