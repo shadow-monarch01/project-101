@@ -1,19 +1,30 @@
 # ⚖️ AI Hiring Intelligence System
-### Qualification-Based Candidate Assessment, Explanation Faithfulness (EFS) & Bias Gap Analysis (BGI)
+### Qualification-Based Candidate Assessment, Evidence Grounding & Decision Auditing
+
+[![Python](https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13%20|%203.14-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
+[![Tests](https://img.shields.io/badge/Pytest-52%2F52%20Passed-brightgreen.svg)](tests/)
+[![Architecture](https://img.shields.io/badge/Architecture-Demographic--Free%20Audit-orange.svg)]()
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)]()
 
 ---
 
 ## 📌 1. Project Overview & Pivot Rationale
-In AI-driven applicant tracking systems (ATS) and recruitment pipelines, Large Language Models (LLMs) are increasingly deployed to screen resumes and justify hiring recommendations. However, standard AI evaluations often suffer from **unexplained behavioral gaps** (where highly qualified candidates are unfairly rejected) and **unfaithful post-hoc explanations** (where the AI fabricates missing competencies).
+In AI-driven applicant tracking systems (ATS) and recruitment pipelines, Large Language Models (LLMs) are increasingly deployed to screen resumes and justify hiring recommendations. However, standard AI evaluations often suffer from:
+1. **Unexplained Behavioral Gaps**: High-qualification candidates receiving unexpectedly low ratings or arbitrary rejections.
+2. **Unfaithful Post-Hoc Explanations**: AI justifications that hallucinate missing qualifications, claim non-existent deficiencies, or contradict candidate records.
+3. **Black-Box Decision Drift**: Lack of transparent, mathematically grounded alignment between candidate merit and AI recommendations.
 
-Following academic review and panel feedback, this project pivots from sensitive demographic testing to an objective, ethical, and mathematically grounded **Qualification-Based Assessment, Explanation Faithfulness (EFS), and Bias/Behavioral Gap Analysis (BGI)** framework.
+Following academic review and panel feedback, this project strictly pivots from sensitive demographic testing to an objective, ethical, and mathematically grounded **Qualification-Based Assessment, Evidence Grounding, Explanation Faithfulness (EFS), and Bias Gap Analysis (BGI)** framework.
 
-### 🛡️ Ethical Standard
-> **The system evaluates candidates strictly on verified job qualifications, required technical skills, domain experience, and certifications. Sensitive demographic attributes (gender, religion, ethnicity, age, nationality) are entirely excluded from the evaluation criteria.**
+### 🛡️ Core Ethical Standard & Audit Framing
+> **The system evaluates candidates strictly on verified job qualifications, required technical skills, domain experience, education, certifications, and technical projects. Sensitive demographic attributes (gender, religion, ethnicity, age, nationality) are entirely excluded from the evaluation pipeline.**
+>
+> **Audit Indicator Disclaimer**: The Bias Gap Index (BGI) is strictly an audit indicator measuring behavioral divergence between expected merit-based criteria and observed AI recommendations. It does not constitute proof of intentional bias or legal discrimination.
 
 ---
 
-## 🚀 2. System Architecture & Core Pipeline
+## 🚀 2. System Architecture & Processing Pipeline
 
 ```
 [ Job Description / Requirements ]          [ Candidate Resume / Profile ]
@@ -22,132 +33,333 @@ Following academic review and panel feedback, this project pivots from sensitive
                                 │
                                 ▼
         ┌──────────────────────────────────────────────────┐
-        │  Qualification & Skill Gap Engine                │
-        │  - Matched, Missing & Additional Skills          │
-        │  - Weighted Qualification Score (0-100%)         │
+        │  1. Canonical Skill Normalization & Alias Engine  │
+        │  - 50+ Synonyms (e.g. k8s -> Kubernetes)         │
+        │  - Case/Format Agnostic Token Matching           │
         └───────────────────────┬──────────────────────────┘
                                 │
                                 ▼
         ┌──────────────────────────────────────────────────┐
-        │  AI / LLM Decision & Justification Engine       │
-        │  (Ollama Qwen 3.5 4B / Fallback Simulator)       │
+        │  2. Qualification & Multi-Component Engine       │
+        │  - Required (40%) & Preferred (10%) Skills Match  │
+        │  - Experience (25%), Education (15%), Certs (5%) │
+        │  - Independent Projects Score (5%)               │
+        │  - Separate Technical Interview Score (0-100)    │
+        │  - Deterministic Benchmark: Score_qual (0-100%)  │
         └───────────────────────┬──────────────────────────┘
                                 │
                                 ▼
         ┌──────────────────────────────────────────────────┐
-        │  Auditing Engine: EFS + BGI                      │
-        │  - Explanation Faithfulness Score (EFS)          │
-        │  - Bias / Behavioral Gap Index (BGI)             │
-        │  - Controlled Qualification Counterfactuals      │
+        │  3. AI / LLM Hiring Evaluator & Explainer        │
+        │  - Local Ollama (Qwen 2.5 / 3.5, Llama 3)        │
+        │  - Fallback Deterministic Qualification Engine   │
+        │  - Generates: Recommendation, Score, Reason      │
         └───────────────────────┬──────────────────────────┘
                                 │
                                 ▼
         ┌──────────────────────────────────────────────────┐
-        │  Mitigation Feedback Loop & Re-evaluation        │
-        │  - Affirmative Qualification Prompt Directives   │
+        │  4. Evidence Grounding & Factuality Verifier     │
+        │  - Extract discrete verifiable claims from text  │
+        │  - Classify: SUPPORTED, PARTIAL, UNSUPPORTED,    │
+        │              or CONTRADICTED                     │
+        │  - 6 Grounding Dimensions (Skills, Exp, Edu, etc)│
+        └───────────────────────┬──────────────────────────┘
+                                │
+                                ▼
+        ┌──────────────────────────────────────────────────┐
+        │  5. Auditing Engine: EFS + BGI                   │
+        │  - Enhanced Explanation Faithfulness Score (EFS) │
+        │  - Refactored Bias Gap Index (BGI: 50/30/20)     │
+        │  - Monotonic & Pairwise Decision Consistency     │
+        │  - Causal Counterfactual Perturbations           │
+        └───────────────────────┬──────────────────────────┘
+                                │
+                                ▼
+        ┌──────────────────────────────────────────────────┐
+        │  6. Mitigation Loop & Re-Evaluation              │
+        │  - Affirmative Qualification Directives          │
         │  - Empirical Before vs After Gap Recovery        │
         └──────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔬 3. Core Mathematical Formulations & Metrics
+## 🔬 3. Core Mathematical Formulations & Auditing Metrics
 
 ### 1. Transparent Qualification Score ($Score_{qual}$)
-A multi-criteria weighted composite ensuring decisions are anchored strictly in job-relevant qualifications:
+A multi-criteria weighted composite ensuring candidate benchmark scores are anchored strictly in verified qualifications:
 $$Score_{qual} = w_s \cdot \text{ReqSkills} + w_p \cdot \text{PrefSkills} + w_e \cdot \text{Exp} + w_d \cdot \text{Edu} + w_c \cdot \text{Certs} + w_r \cdot \text{Projects}$$
-*Default Weights:* Required Skills ($40\%$), Preferred Skills ($10\%$), Experience ($25\%$), Education ($15\%$), Certifications ($5\%$), Projects ($5\%$).
 
-### 2. Bias / Behavioral Gap Index (BGI)
-A normalized index ($0-100$) measuring the discrepancy between expected merit-based performance and observed AI recommendation:
-$$\text{BGI} = 0.40 \cdot |\text{Score}_{qual} - \text{Score}_{AI}| + 0.35 \cdot \text{RankGap}_{norm} + 0.15 \cdot (100 - \text{EFS}) + 0.10 \cdot \text{SkillGapPenalty}$$
-* **0–20:** Very Low Gap *(High Consistency)*
-* **21–40:** Low Gap *(Minor Variance)*
-* **41–60:** Moderate Gap *(Noticeable Divergence)*
-* **61–80:** High Gap *(Audit Flagged)*
-* **81–100:** Very High Gap *(Severe Inconsistency)*
-
-### 3. Explanation Faithfulness Score (EFS)
-Quantifies whether the AI's natural language justification grounds accurately on verified candidate skills or hallucinates non-existent deficits:
-$$\text{EFS} = 100 - \text{Penalties}_{\text{Hallucinated Missing Skills}} - \text{Penalties}_{\text{Grounding Inconsistencies}}$$
+* **Default Weighting**:
+  * Required Skills ($\text{ReqSkills}$): **40%**
+  * Preferred Skills ($\text{PrefSkills}$): **10%**
+  * Domain Experience ($\text{Exp}$): **25%**
+  * Education Level ($\text{Edu}$): **15%**
+  * Professional Certifications ($\text{Certs}$): **5%**
+  * Practical Projects Portfolio ($\text{Projects}$): **5%**
+* **Technical Interview Score**: Handled as an independent post-screening evaluation dimension (0–100) and not conflated with candidate project credentials.
 
 ---
 
-## 🛠️ 4. Technology Stack
+### 2. Evidence Grounding & Traceability Framework
+Extracts verifiable factual assertions from AI justification text and classifies each claim against the candidate record:
 
-* **Backend:** Python 3.11 – 3.14, FastAPI, Uvicorn, Pydantic
-* **Machine Learning & NLP:** Scikit-learn (TF-IDF Vectorization, K-Means Clustering $k=3$)
-* **Data Processing:** Pandas, NumPy
-* **Statistical Testing:** SciPy (`scipy.stats.binomtest`, `scipy.stats.chi2_contingency`, `scipy.stats.ttest_rel`)
-* **AI Evaluators:** Local Ollama (`qwen3.5:4b` / `llama3`), Cloud API endpoints, and Deterministic Qualification Simulator
-* **Frontend:** HTML5, CSS3 (Dark/Light Themes), Vanilla JavaScript (ES6+)
+| Claim Verification Status | Definition | Faithfulness Impact |
+| :--- | :--- | :---: |
+| `SUPPORTED` | Claim matches candidate record and requirements | $0$ Penalty |
+| `PARTIALLY_SUPPORTED` | Claim is plausibly aligned but lacks direct explicit evidence | $-3$ Penalty |
+| `UNSUPPORTED` | AI mentions credentials not found in candidate profile | $-8$ Penalty |
+| `CONTRADICTED` | AI claims candidate lacks a skill they demonstrably possess | $-20$ Penalty |
 
----
-
-## 📡 5. REST API Reference
-
-| Endpoint | Method | Description |
-| :--- | :---: | :--- |
-| `/api/health` | `GET` | System health check and Ollama service discovery |
-| `/api/jobs` | `GET/POST` | List standard job templates or register custom requirements |
-| `/api/candidates` | `GET/POST` | Fetch candidate pool with precomputed qualification scores |
-| `/api/skill-analysis` | `POST` | Calculate matched, missing, additional skills and skill gap % |
-| `/api/qualification-score`| `POST` | Calculate weighted multi-component qualification score |
-| `/api/evaluate` | `POST` | Run AI hiring recommendation, explanation, EFS, and BGI |
-| `/api/bgi` | `POST` | Compute Bias/Behavioral Gap Index |
-| `/api/efs` | `POST` | Compute Explanation Faithfulness Score |
-| `/api/counterfactual` | `POST` | Execute controlled qualification intervention & invariance check |
-| `/api/mitigation` | `POST` | Execute Before vs After Prompt Mitigation Feedback Loop |
-| `/api/batch-evaluate` | `POST` | Audit complete candidate pool against target job requirements |
-| `/api/cluster` | `POST` | Cluster candidates using TF-IDF + K-Means on skill vectors |
-| `/api/report/{candidate_id}` | `GET` | Generate full individual candidate audit dossier |
+$$\text{Grounding Score} = \max\left(0, \min\left(100, 100 - 20 \cdot N_{\text{contradicted}} - 8 \cdot N_{\text{unsupported}} - 3 \cdot N_{\text{partial}}\right)\right)$$
 
 ---
 
-## 💻 6. Installation & Execution
+### 3. Enhanced Explanation Faithfulness Score (EFS)
+Quantifies whether the AI's natural language justification accurately reflects candidate merits across 6 grounding dimensions:
+$$\text{EFS} = \text{clamp}\left(100 - \sum \text{Penalties}_{\text{Hallucinated Missing Skills}} - \sum \text{Penalties}_{\text{Evidence Violations}}, 0, 100\right)$$
 
-### 1. Quick Start (Windows Batch)
-Double-click `run_complete_system.bat` or `launch_hiring_system.bat` to launch the server and open the web dashboard at `http://127.0.0.1:8000`.
+#### 6 Grounding Dimensions Evaluated:
+1. `skill_grounding`: Accuracy of matched/missing skill citations against verified resume skills.
+2. `experience_grounding`: Alignment of experience evaluation with actual years in domain.
+3. `education_grounding`: Correct reflection of degree requirements (Bachelors/Masters/PhD).
+4. `certification_grounding`: Factual verification of active industry certifications.
+5. `project_grounding`: Assessment grounded in actual project count, scope, and technologies.
+6. `decision_grounding`: Internal coherence between stated reasoning and assigned recommendation.
 
-### 2. Manual Command Line
+---
+
+### 4. Refactored Bias / Behavioral Gap Index (BGI)
+Measures the behavioral divergence between the deterministic qualification benchmark and observed AI recommendations across three transparent components:
+
+$$\text{BGI} = w_{\text{qual}} \cdot \text{Qualification Gap} + w_{\text{dec}} \cdot \text{Decision Gap} + w_{\text{expl}} \cdot \text{Explanation Gap}$$
+
+$$\text{BGI} = 0.50 \cdot |Score_{qual} - Score_{AI}| + 0.30 \cdot \left(\frac{|\text{Rank}_{qual} - \text{Rank}_{AI}|}{3} \times 100\right) + 0.20 \cdot (100 - \text{EFS})$$
+
+* **Decision Ranks**: `REJECT` = 0, `BORDERLINE` = 1, `INTERVIEW` = 2, `STRONG_HIRE` = 3 (Max distance = 3).
+* **Configurable Weights**: Qualification Gap ($50\%$), Decision Gap ($30\%$), Explanation Gap ($20\%$).
+* **BGI Severity Scale**:
+  * **0–20 (Very Low Gap)**: High behavioral consistency; AI output closely mirrors qualification merits.
+  * **21–40 (Low Gap)**: Minor divergence; within acceptable screening variance.
+  * **41–60 (Moderate Gap)**: Noticeable divergence; candidate merits partially misaligned with AI decision.
+  * **61–80 (High Gap)**: High divergence; candidate flagged for human recruiter audit review.
+  * **81–100 (Very High Gap)**: Severe inconsistency or major unfaithfulness in AI justification.
+
+---
+
+### 5. Monotonic & Pairwise Decision Consistency
+* **Monotonicity**: If candidate $A$ strictly dominates candidate $B$ in all qualification dimensions ($Score_{qual}(A) > Score_{qual}(B)$), then $Score_{AI}(A) \ge Score_{AI}(B)$.
+* **Violation Flag**: When $Score_{qual}(A) \ge Score_{qual}(B) + 10$ but $Score_{AI}(A) < Score_{AI}(B)$, a monotonicity violation is recorded.
+
+---
+
+## 🔤 4. Canonical Skill Normalization Dictionary
+
+The normalization engine resolves aliases, abbreviations, casing, and typos to canonical skill names:
+
+| Category | Canonical Skill | Resolved Aliases / Synonyms |
+| :--- | :--- | :--- |
+| **Languages** | `Python` | `python`, `py`, `python3`, `python 3` |
+| | `JavaScript` | `javascript`, `js`, `es6`, `ecmascript` |
+| | `TypeScript` | `typescript`, `ts` |
+| | `C++` | `cpp`, `c plus plus` |
+| | `C#` | `csharp`, `c sharp`, `cs` |
+| | `Golang` | `go`, `golang` |
+| **Databases** | `PostgreSQL` | `postgres`, `postgresql`, `psql`, `pg` |
+| | `MongoDB` | `mongo`, `mongodb` |
+| | `MySQL` | `mysql` |
+| | `Redis` | `redis`, `redis cache` |
+| **Frameworks** | `FastAPI` | `fastapi`, `fast api` |
+| | `Django` | `django`, `django rest framework`, `drf` |
+| | `Flask` | `flask` |
+| | `React` | `react`, `reactjs`, `react.js` |
+| | `Node.js` | `node`, `nodejs`, `node.js` |
+| **Cloud & DevOps** | `Kubernetes` | `k8s`, `kubernetes`, `kube` |
+| | `Docker` | `docker`, `containerization`, `containers` |
+| | `AWS` | `aws`, `amazon web services`, `ec2`, `s3` |
+| | `GCP` | `gcp`, `google cloud`, `google cloud platform` |
+| | `Azure` | `azure`, `microsoft azure` |
+| | `CI/CD` | `cicd`, `ci/cd`, `github actions`, `gitlab ci` |
+| **AI / ML** | `PyTorch` | `pytorch`, `torch` |
+| | `TensorFlow` | `tf`, `tensorflow` |
+| | `Scikit-Learn` | `scikit-learn`, `sklearn` |
+| | `NLP` | `nlp`, `natural language processing` |
+| | `Computer Vision` | `cv`, `computer vision` |
+| **Architecture** | `REST API` | `rest`, `rest api`, `restful`, `restful api` |
+| | `GraphQL` | `graphql`, `gql` |
+| | `Microservices` | `microservices`, `microservice architecture` |
+
+---
+
+## 🛠️ 5. Technology Stack
+
+* **Backend Framework**: Python 3.11 – 3.14, FastAPI 0.115+, Uvicorn, Pydantic v2
+* **Machine Learning & NLP**: Scikit-Learn (TF-IDF Vectorization, K-Means Clustering $k=3$)
+* **Data Processing**: Pandas, NumPy
+* **Statistical Auditing**: SciPy (`scipy.stats.binomtest`, `scipy.stats.chi2_contingency`, `scipy.stats.ttest_rel`)
+* **AI Evaluators**: Local Ollama (`qwen2.5`, `qwen3.5`, `llama3`), Cloud API endpoints, Deterministic Simulator
+* **Frontend**: Vanilla HTML5, Modern CSS3 (Dark/Light Mode), Vanilla ES6+ JavaScript (Zero React / npm build dependencies)
+* **Testing Suite**: Pytest (52 automated unit and integration tests)
+
+---
+
+## 📡 6. Complete REST API Reference (24 Endpoints)
+
+All endpoints accept JSON payloads and return structured responses.
+
+| # | Endpoint | Method | Description | Sample Request | Sample Response |
+| :---: | :--- | :---: | :--- | :--- | :--- |
+| 1 | `/api/health` | `GET` | Health status and Ollama availability | `GET /api/health` | `{"status":"healthy","ollama_available":true}` |
+| 2 | `/api/jobs` | `GET` | Retrieve job role profiles | `GET /api/jobs` | `[{"id":"backend_dev","title":"...","required_skills":[...]}]` |
+| 3 | `/api/jobs` | `POST` | Create or update job profile | `{"id":"ml_eng","title":"ML Engineer",...}` | `{"status":"created","job":{...}}` |
+| 4 | `/api/candidates` | `GET` | Retrieve candidate pool | `GET /api/candidates?job_id=backend_dev` | `{"count":10,"candidates":[...]}` |
+| 5 | `/api/candidates` | `POST` | Add custom candidate | `{"id":"C_99","name":"Alex",...}` | `{"status":"created","candidate":{...}}` |
+| 6 | `/api/candidates/{id}` | `GET` | Fetch single candidate | `GET /api/candidates/SWE_001` | `{"id":"SWE_001","name":"Priya Sharma",...}` |
+| 7 | `/api/skill-analysis` | `POST` | Skill gap analysis & matching | `{"candidate_skills":["py","postgres"],"required_skills":["Python","PostgreSQL"]}` | `{"matched_required":["Python","PostgreSQL"],"skill_gap_percentage":0.0}` |
+| 8 | `/api/skill-normalization` | `POST` | Normalize raw skill aliases | `{"skills":["k8s","js","postgres","fast api"]}` | `{"normalized_skills":["Kubernetes","JavaScript","PostgreSQL","FastAPI"]}` |
+| 9 | `/api/qualification-score` | `POST` | Deterministic qualification score | `{"candidate":{...},"job":{...}}` | `{"qualification_score":88.5,"breakdown":{...}}` |
+| 10 | `/api/evaluate` | `POST` | Primary AI candidate evaluation | `{"candidate":{...},"job":{...}}` | `{"recommendation":"STRONG_HIRE","score":90,"efs":96.0,"bgi":6.5}` |
+| 11 | `/api/bgi` | `POST` | Compute 3-component BGI | `{"qualification_score":85,"ai_score":80,"efs_score":90,"ai_decision":"INTERVIEW"}` | `{"bgi":12.5,"severity":"Very Low Gap","components":{...}}` |
+| 12 | `/api/efs` | `POST` | Compute 6-dimension EFS | `{"justification":"Strong Python skills...","candidate":{...},"job":{...}}` | `{"efs":95.0,"grounding_breakdown":{...}}` |
+| 13 | `/api/evidence` | `POST` | Extract & verify factual claims | `{"justification":"Candidate has 5 yrs exp and knows Python.","candidate":{...}}` | `{"claims":[{"claim":"...","status":"SUPPORTED"}],"evidence_grounding_score":100}` |
+| 14 | `/api/decision-consistency`| `POST`| Monotonic & pairwise checks | `{"candidates_with_evaluations":[{"candidate":{...},"evaluation":{...}}]}` | `{"is_monotonic":true,"violations":[],"consistency_score":100}` |
+| 15 | `/api/counterfactual` | `POST` | Causal perturbation evaluation | `{"candidate":{...},"job":{...},"intervention_type":"remove_core_skill"}` | `{"original_eval":{...},"counterfactual_eval":{...},"is_monotonic":true}` |
+| 16 | `/api/mitigation` | `POST` | Affirmative prompt mitigation | `{"candidate":{...},"job":{...}}` | `{"before":{...},"after":{...},"bgi_reduction_pct":82.5}` |
+| 17 | `/api/batch-evaluate` | `POST` | Full candidate pool audit | `{"job_id":"backend_dev"}` | `{"total_candidates":10,"mean_bgi":14.2,"mean_efs":92.8,"candidates":[...]}` |
+| 18 | `/api/cluster` | `POST` | TF-IDF + K-Means clustering | `{"candidates":[...]}` | `{"clusters":[{"cluster_id":0,"top_terms":["python","sql"],"candidates":[...]}]}` |
+| 19 | `/api/statistics` | `POST` | Statistical disparity tests | `{"group_a":[...],"group_b":[...]}` | `{"mcnemar_p_value":0.45,"chi_square_p_value":0.62,"disparity_detected":false}` |
+| 20 | `/api/re-evaluate` | `POST` | Re-evaluate with modified criteria| `{"candidate_id":"SWE_001","adjusted_weights":{"skills":0.5}}` | `{"candidate_id":"SWE_001","updated_score":91.2}` |
+| 21 | `/api/resume-screen` | `POST` | Resume text parsing & match | `{"resume_text":"Experienced Python developer with Django and AWS..."}` | `{"parsed_skills":["Python","Django","AWS"],"suggested_roles":[...]}` |
+| 22 | `/api/export-report` | `POST` | Export JSON/CSV audit report | `{"candidates":[...],"format":"json"}` | `{"export_url":"/reports/audit_2026.json","summary":{...}}` |
+| 23 | `/api/upload_dataset` | `POST` | Upload custom candidate dataset | `FormData: file=@candidates.csv` | `{"status":"success","rows_imported":50}` |
+| 24 | `/api/report/{id}` | `GET` | Individual Candidate Audit Dossier| `GET /api/report/SWE_001` | `{"candidate_id":"SWE_001","dossier":{...}}` |
+
+---
+
+### Sample cURL Commands
+
+#### 1. Evaluate Candidate with Evidence Traceability & Grounding
+```bash
+curl -X POST "http://127.0.0.1:8000/api/evaluate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidate": {
+      "id": "SWE_001",
+      "name": "Priya Sharma",
+      "skills": ["Python", "PostgreSQL", "FastAPI", "Docker", "Git"],
+      "experience_years": 5,
+      "education": "B.Tech Computer Science",
+      "certifications": ["AWS Certified Developer"],
+      "projects_score": 88.0,
+      "technical_interview_score": 90.0
+    },
+    "job": {
+      "id": "backend_dev",
+      "title": "Senior Python Backend Engineer",
+      "required_skills": ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
+      "preferred_skills": ["Docker", "FastAPI", "AWS", "CI/CD"],
+      "min_experience_years": 4,
+      "min_education_level": "Bachelors"
+    }
+  }'
+```
+
+#### 2. Evidence Traceability Claim Verification
+```bash
+curl -X POST "http://127.0.0.1:8000/api/evidence" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "justification": "Candidate has 5 years of Python experience, knows FastAPI and Docker, but lacks required Rust experience.",
+    "candidate": {
+      "id": "SWE_001",
+      "skills": ["Python", "FastAPI", "Docker"],
+      "experience_years": 5
+    },
+    "job": {
+      "id": "backend_dev",
+      "required_skills": ["Python", "PostgreSQL"]
+    }
+  }'
+```
+
+#### 3. Canonical Skill Normalization
+```bash
+curl -X POST "http://127.0.0.1:8000/api/skill-normalization" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skills": ["postgres", "k8s", "js", "fast api", "aws", "py"]
+  }'
+```
+
+---
+
+## 💻 7. Installation & Quick Start
+
+### 1. Windows 1-Click Launch
+Double-click `run_complete_system.bat` or `launch_hiring_system.bat`.
+This automatically launches the FastAPI server and opens your default browser at `http://127.0.0.1:8000`.
+
+### 2. Manual Setup
 ```powershell
-# Activate Python virtual environment
+# 1. Create and activate virtual environment
+python -m venv .venv
 .venv\Scripts\activate
 
-# Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# Run Automated Test Suite (23/23 Tests)
+# 3. Run all 52 automated unit & integration tests
 python -m pytest
 
-# Run Complete CLI Demonstration Pipeline
+# 4. Run CLI demonstration pipeline
 python main.py all
 
-# Start FastAPI Application
+# 5. Start FastAPI application server
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ---
 
-## 🎬 7. 5-Minute Project Demonstration Script (For Viva / Panel)
+## 🧪 8. Test Suite Summary (52/52 Tests Passing)
 
-1. **Step 1: Dashboard Overview (Tab 1)**
-   - Show the active Job Role (`Senior Python Backend Engineer`), required/preferred skills cloud, and real-time KPI cards (Avg Qual Score: 84.5%, Mean EFS: 92.4, Mean BGI: 14.8).
-2. **Step 2: Candidate Pool & Semantic Clustering (Tab 2)**
-   - Click **"Semantic Clustering (TF-IDF + K-Means)"** to show skill-based candidate partitioning.
-   - Click candidate `SWE_001` (Priya Sharma). Show the detailed **Selected Candidate Card** with matched required skills (Python, SQL, REST API, Git, PostgreSQL) and 89.8% qualification score.
-3. **Step 3: Qualification Counterfactual Playground (Tab 3)**
-   - Click **"Test in Qualification Counterfactual Playground"**.
-   - Ablate a core skill (`Remove Core Skill: Python`).
-   - Click **"Execute Causal Evaluation"**. Show how the AI adjusts decision from `STRONG_HIRE` to `INTERVIEW` with **Monotonic Consistency** and $100\%$ Explanation Faithfulness.
-4. **Step 4: Mitigation Feedback Loop (Tab 4)**
-   - Click **"Execute Mitigation & Re-evaluation"**. Show the Before vs After comparison and empirical BGI reduction ($82.8\%$ gap improvement).
-5. **Step 5: Interactive API Console (Tab 6)**
-   - Select `/api/evaluate` or `/api/skill-analysis` and click **"Send API Request"** to showcase the live REST API response for external ATS integration.
+The project includes 52 automated tests across 8 test suites:
+
+| Test Module | Tests | Description | Status |
+| :--- | :---: | :--- | :---: |
+| `test_priority1_features.py` | 29 | Evidence traceability, EFS 6-dim, BGI 3-comp, Skill normalizer, API endpoints | ✅ Passed |
+| `test_api.py` | 7 | REST API status codes, schema validation, and health checks | ✅ Passed |
+| `test_bgi.py` | 3 | BGI calculation, component decomposition, and rank gap calculations | ✅ Passed |
+| `test_faithfulness.py` | 2 | EFS calculation, hallucination penalty, and grounding checks | ✅ Passed |
+| `test_qualifications.py` | 3 | Multi-component qualification scoring, weights, and normalization | ✅ Passed |
+| `test_statistics.py` | 4 | McNemar test, Chi-square, and paired regression statistical checks | ✅ Passed |
+| `test_variations.py` | 2 | Qualification counterfactual perturbations and causal consistency | ✅ Passed |
+| `test_clustering.py` | 2 | TF-IDF candidate skill vectorization and K-Means clustering ($k=3$) | ✅ Passed |
+| **Total** | **52** | **100% Passing Test Suite** | **✅ All 52 Passed** |
 
 ---
 
-## ⚖️ 8. Academic & Research Contribution
-* **Decoupled Qualification Grounding:** Eliminates subjective or demographic bias by evaluating resumes against formal job requirement criteria.
-* **Explanation Faithfulness (EFS):** Quantifies whether AI justifications truthfully reflect candidate merits rather than generating deceptive post-hoc excuses.
-* **Behavioral Gap Index (BGI):** Establishes an empirical metric to audit, detect, and mitigate inconsistencies in AI decision-making.
+## 🎬 9. 5-Minute Viva / Project Demonstration Walkthrough
+
+1. **Step 1: System Overview & KPI Dashboard (Tab 1)**
+   - Open `http://127.0.0.1:8000` in browser.
+   - Show active role: `Senior Python Backend Engineer` with required skills (`Python`, `SQL`, `REST API`, `Git`, `PostgreSQL`).
+   - Highlight KPI cards: **Mean Qualification Score (84.5%)**, **Mean EFS (92.4)**, **Mean BGI (14.8)**.
+2. **Step 2: Candidate Pool, Semantic Clustering & Evidence Card (Tab 2)**
+   - Click **"Semantic Clustering (TF-IDF + K-Means)"** to showcase skill-based candidate grouping.
+   - Select candidate `SWE_001` (Priya Sharma).
+   - Show the **Evidence Traceability Claims Table**: verified claims (`SUPPORTED`), claim status badges, and 6-dimension EFS breakdown meter.
+3. **Step 3: Qualification Counterfactual Playground (Tab 3)**
+   - Select `SWE_001` and choose **"Remove Core Skill: Python"**.
+   - Click **"Execute Causal Evaluation"**.
+   - Show the monotonic decision transition (`STRONG_HIRE` $\to$ `INTERVIEW`), demonstrating causal sensitivity to true qualifications.
+4. **Step 4: Mitigation Feedback Loop (Tab 4)**
+   - Click **"Execute Mitigation & Re-evaluation"**.
+   - Highlight the Before vs After comparison and empirical BGI reduction ($82.8\%$ gap improvement).
+5. **Step 5: Interactive REST API Console (Tab 6)**
+   - Select `/api/evidence` or `/api/bgi` in the dropdown.
+   - Click **"Send API Request"** to show live JSON request/response execution for external ATS integration.
+
+---
+
+## 📄 10. License & Ethics Statement
+This project is licensed under the MIT License. It is intended for academic research, recruitment auditing, and transparency verification. The system is designed to audit AI decision drift and ensure merit-based hiring practices.

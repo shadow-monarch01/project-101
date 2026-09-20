@@ -1,39 +1,86 @@
 """
-AI Hiring Intelligence - FastAPI REST API Gateway
-Exposes qualification-based candidate assessment, skill gap analysis,
-Explanation Faithfulness Scoring (EFS), Bias/Behavioral Gap Index (BGI),
-qualification counterfactual testing, mitigation feedback loops, and semantic clustering.
+AI Hiring Intelligence System - FastAPI REST API Gateway
+Exposes qualification-based candidate assessment, skill gap analysis, Evidence Traceability,
+Explanation Faithfulness Scoring (EFS), Behavioral Gap Index (BGI),
+qualification counterfactual testing, decision consistency, mitigation feedback loops, and semantic clustering.
 """
 
 import os
 import glob
+import io
+import json
+import re
 import pandas as pd
 from typing import Dict, List, Any, Optional, Union
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, File, UploadFile
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from modules.skill_normalization import (
+    canonicalize_skill,
+    normalize_skill,
+    normalize_skills_list,
+    get_canonical_skills
+)
+from modules.skill_analysis import (
+    match_skills,
+    parse_skills_list,
+    normalize_skill_string
+)
 from modules.qualifications import (
     DEFAULT_JOB_TEMPLATES,
     DEFAULT_SCORING_WEIGHTS,
-    match_skills,
-    compute_overall_qualification_score,
-    parse_skills_list
+    evaluate_experience_match,
+    evaluate_education_relevance,
+    evaluate_projects_score,
+    compute_overall_qualification_score
 )
-from modules.bgi import compute_bgi, check_decision_consistency
-from modules.faithfulness import evaluate_faithfulness_instance
-from modules.variations import make_qualification_variation, get_available_qualification_concepts
-from modules.llm_client import evaluate_candidate, check_ollama_connectivity
-from modules.clustering import cluster_dataframe, get_cluster_summary
-from modules.mitigation import mitigation_instruction, evaluate_mitigation_feedback_loop
-from modules.statistics import mcnemar_test, multiclass_chi_square, paired_regression_test
+from modules.evidence import (
+    extract_claims_from_explanation,
+    evaluate_evidence_traceability
+)
+from modules.bgi import (
+    compute_bgi,
+    check_decision_consistency,
+    BGI_DISCLAIMER
+)
+from modules.faithfulness import (
+    evaluate_faithfulness_instance,
+    check_skill_mention_faithfulness
+)
+from modules.decision_consistency import (
+    check_monotonicity,
+    check_pairwise_consistency,
+    evaluate_pool_consistency
+)
+from modules.variations import (
+    make_qualification_variation,
+    get_available_qualification_concepts
+)
+from modules.llm_client import (
+    evaluate_candidate,
+    check_ollama_connectivity
+)
+from modules.clustering import (
+    cluster_dataframe,
+    get_cluster_summary
+)
+from modules.mitigation import (
+    mitigation_instruction,
+    evaluate_mitigation_feedback_loop
+)
+from modules.statistics import (
+    mcnemar_test,
+    multiclass_chi_square,
+    paired_regression_test
+)
 
 app = FastAPI(
-    title="AI Hiring Intelligence & Qualification Auditing API",
-    description="REST API for qualification-based hiring assessment, EFS faithfulness scoring, BGI behavioral gap auditing, and debiasing mitigation.",
-    version="2.0.0"
+    title="AI Hiring Intelligence System for Qualification-Based Candidate Assessment and Decision Auditing",
+    description="REST API for qualification-based hiring assessment, Evidence Traceability, EFS faithfulness scoring, BGI behavioral gap auditing, and decision consistency.",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -51,6 +98,9 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 JOB_STORE: Dict[str, Dict[str, Any]] = dict(DEFAULT_JOB_TEMPLATES)
 ACTIVE_DATASET: str = "01_software_engineering_benchmark.csv"
 
+# Custom Added Candidates (in-memory overlay)
+CUSTOM_CANDIDATES: List[Dict[str, Any]] = []
+
 # ============================================================================
 # Pydantic Request Models
 # ============================================================================
@@ -67,7 +117,7 @@ class JobRequirementModel(BaseModel):
     description: Optional[str] = "Role requirements and technical qualifications."
 
 class CandidateProfileModel(BaseModel):
-    candidate_id: Optional[str] = "CAND_TEST_01"
+    candidate_id: Optional[str] = "CAND_CUSTOM_01"
     name: Optional[str] = "Candidate"
     role: Optional[str] = "Software Engineer"
     expected_role: Optional[str] = "Senior Python Backend Engineer"
@@ -78,8 +128,9 @@ class CandidateProfileModel(BaseModel):
     certifications: Optional[Union[List[str], str]] = "AWS Solutions Architect"
     certifications_count: Optional[int] = 1
     projects: Optional[str] = "Distributed Microservices"
-    interview_score: Optional[float] = 85.0
-    previous_salary: Optional[int] = 100000
+    projects_score: Optional[float] = 85.0
+    technical_interview_score: Optional[float] = 85.0
+    soft_skills: Optional[Union[List[str], str]] = "Problem Solving, Communication"
 
 class EvaluateRequest(BaseModel):
     candidate: Dict[str, Any]
@@ -90,10 +141,20 @@ class EvaluateRequest(BaseModel):
     mitigation: Optional[bool] = False
     mitigation_instruction: Optional[str] = ""
 
+class EvidenceRequest(BaseModel):
+    candidate_id: Optional[str] = None
+    job_id: Optional[str] = "JOB_SWE_01"
+    explanation: str
+    candidate_data: Optional[Dict[str, Any]] = None
+    job: Optional[Dict[str, Any]] = None
+
 class SkillAnalysisRequest(BaseModel):
     candidate_skills: Union[List[str], str]
     required_skills: List[str]
     preferred_skills: Optional[List[str]] = None
+
+class SkillNormalizationRequest(BaseModel):
+    skills: Union[List[str], str]
 
 class QualScoreRequest(BaseModel):
     candidate: Dict[str, Any]
@@ -107,6 +168,8 @@ class BGIRequest(BaseModel):
     ai_score: Optional[float] = None
     efs_score: Optional[float] = 90.0
     required_skill_match: Optional[float] = 100.0
+    experience_match: Optional[float] = 100.0
+    weights: Optional[Dict[str, float]] = None
 
 class EFSRequest(BaseModel):
     explanation: str
@@ -114,6 +177,8 @@ class EFSRequest(BaseModel):
     decision: str
     skill_analysis: Optional[Dict[str, Any]] = None
     experience_analysis: Optional[Dict[str, Any]] = None
+    candidate_data: Optional[Dict[str, Any]] = None
+    job_requirements: Optional[Dict[str, Any]] = None
 
 class CounterfactualRequest(BaseModel):
     candidate: Dict[str, Any]
@@ -123,11 +188,51 @@ class CounterfactualRequest(BaseModel):
     mode: Optional[str] = "Demo Simulation Mode"
     model_name: Optional[str] = "qwen3.5:4b"
 
+class DecisionConsistencyRequest(BaseModel):
+    candidate_a: Dict[str, Any]
+    candidate_b: Dict[str, Any]
+    eval_a: Optional[Dict[str, Any]] = None
+    eval_b: Optional[Dict[str, Any]] = None
+
+class StatisticsRequest(BaseModel):
+    test_type: str = "mcnemar"  # 'mcnemar', 'chi_square', or 'paired_regression'
+    original_values: List[Any]
+    modified_values: List[Any]
+
 class MitigationRequest(BaseModel):
-    candidates: List[Dict[str, Any]]
+    candidates: Optional[List[Dict[str, Any]]] = None
     job: Optional[Dict[str, Any]] = None
     mode: Optional[str] = "Demo Simulation Mode"
     model_name: Optional[str] = "qwen3.5:4b"
+
+class BatchEvaluateRequest(BaseModel):
+    job_id: Optional[str] = "JOB_SWE_01"
+    job: Optional[Dict[str, Any]] = None
+    candidates: Optional[List[Any]] = None
+    mode: Optional[str] = "Demo Simulation Mode"
+    model_name: Optional[str] = "qwen3.5:4b"
+    mitigation: Optional[bool] = False
+    limit: Optional[int] = None
+
+class ReEvaluateRequest(BaseModel):
+    candidate: Dict[str, Any]
+    job: Optional[Dict[str, Any]] = None
+    mitigation_instruction: Optional[str] = None
+    mode: Optional[str] = "Demo Simulation Mode"
+    model_name: Optional[str] = "qwen3.5:4b"
+
+class ResumeScreenRequest(BaseModel):
+    resume_text: Optional[str] = None
+    candidate_data: Optional[Dict[str, Any]] = None
+    job_id: Optional[str] = "JOB_SWE_01"
+    job: Optional[Dict[str, Any]] = None
+    mode: Optional[str] = "Demo Simulation Mode"
+    model_name: Optional[str] = "qwen3.5:4b"
+
+class ExportReportRequest(BaseModel):
+    candidate_id: str
+    job_id: Optional[str] = "JOB_SWE_01"
+    format: str = "json"  # 'json' or 'csv'
 
 # ============================================================================
 # API Endpoints
@@ -138,10 +243,11 @@ def api_health():
     """System health check and loaded modules summary."""
     return {
         "status": "healthy",
-        "system": "AI Hiring Intelligence & Qualification Auditing API",
-        "version": "2.0.0",
+        "system": "AI Hiring Intelligence System for Qualification-Based Candidate Assessment and Decision Auditing",
+        "version": "2.1.0",
         "active_dataset": ACTIVE_DATASET,
-        "ollama": check_ollama_connectivity()
+        "ollama": check_ollama_connectivity(),
+        "disclaimer": BGI_DISCLAIMER
     }
 
 @app.get("/api/jobs")
@@ -170,64 +276,86 @@ def api_select_dataset(filename: str = Body(..., embed=True)):
     global ACTIVE_DATASET
     path = os.path.join(DATA_DIR, filename)
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Dataset not found")
+        raise HTTPException(status_code=404, detail=f"Dataset '{filename}' not found")
     ACTIVE_DATASET = filename
     return {"message": f"Active dataset set to {filename}", "active_dataset": filename}
 
-@app.get("/api/concept_options")
-def get_concept_options(dataset_name: Optional[str] = None, concept: str = "gender"):
-    filename = dataset_name or os.path.basename(session_cache["active_dataset"])
-    filepath = os.path.join(DATA_DIR, filename)
-    if not os.path.exists(filepath):
-        filepath = os.path.join(DATA_DIR, "high_bias_hiring_dataset.csv")
-    df = pd.read_csv(filepath)
-    
-    col = resolve_column_for_concept(df, concept)
-    values = get_available_values(df, col) if col else []
-    pair = default_pair(df, concept)
-    
-    return {
-        "concept": concept,
-        "resolved_column": col,
-        "available_values": values,
-        "default_pair": {"val_a": pair[1] if pair else (values[0] if len(values)>0 else None), "val_b": pair[2] if pair else (values[1] if len(values)>1 else None)} if (pair or len(values)>=2) else None
-    }
+@app.post("/api/upload_dataset")
+def api_upload_dataset(
+    filename: str = Body(..., embed=True),
+    csv_content: str = Body(..., embed=True)
+):
+    """Uploads and registers a custom qualification CSV dataset."""
+    if not filename.endswith(".csv"):
+        filename += ".csv"
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
+    target_path = os.path.join(DATA_DIR, safe_name)
+
+    try:
+        df = pd.read_csv(io.StringIO(csv_content))
+        if df.empty:
+            raise HTTPException(status_code=400, detail="CSV content is empty")
+        df.to_csv(target_path, index=False)
+        return {
+            "message": f"Dataset '{safe_name}' uploaded successfully with {len(df)} records.",
+            "filename": safe_name,
+            "row_count": len(df),
+            "columns": list(df.columns)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
 
 @app.get("/api/candidates")
 def api_get_candidates(
     search: Optional[str] = None,
     job_id: Optional[str] = "JOB_SWE_01",
     page: int = 1,
-    limit: int = 20
+    limit: int = 100
 ):
     """
     Returns candidate profiles from active dataset with precomputed qualification scores and skill match %.
     """
     path = os.path.join(DATA_DIR, ACTIVE_DATASET)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Dataset file missing")
+    records = []
 
-    df = pd.read_csv(path).fillna("")
+    if os.path.exists(path):
+        df = pd.read_csv(path).fillna("")
+        records.extend(df.to_dict(orient="records"))
+
+    # Include custom registered candidates
+    records.extend(CUSTOM_CANDIDATES)
+
     if search:
         s = search.lower()
-        df = df[df.apply(lambda r: s in str(r.to_dict()).lower(), axis=1)]
+        records = [r for r in records if s in json.dumps(r).lower()]
 
     job = JOB_STORE.get(job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
 
-    records = []
-    for _, row in df.iterrows():
-        cand = row.to_dict()
+    processed = []
+    for cand in records:
         q_res = compute_overall_qualification_score(cand, job)
-        cand["qualification_score"] = q_res["qualification_score"]
-        cand["expected_decision"] = q_res["expected_decision"]
-        cand["required_match_percentage"] = q_res["skill_analysis"]["required_match_percentage"]
-        cand["matched_skills"] = q_res["skill_analysis"]["matched_required_skills"]
-        cand["missing_skills"] = q_res["skill_analysis"]["missing_required_skills"]
-        records.append(cand)
+        cand_copy = dict(cand)
+        cand_copy["qualification_score"] = q_res["qualification_score"]
+        cand_copy["score"] = q_res["qualification_score"]
+        cand_copy["expected_decision"] = q_res["expected_decision"]
+        cand_copy["required_match_percentage"] = q_res["skill_analysis"]["required_match_percentage"]
+        cand_copy["preferred_match_percentage"] = q_res["skill_analysis"]["preferred_match_percentage"]
+        cand_copy["matched_skills"] = q_res["skill_analysis"]["matched_required_skills"]
+        cand_copy["missing_skills"] = q_res["skill_analysis"]["missing_required_skills"]
+        cand_copy["matched_preferred_skills"] = q_res["skill_analysis"]["matched_preferred_skills"]
+        cand_copy["missing_preferred_skills"] = q_res["skill_analysis"]["missing_preferred_skills"]
+        cand_copy["additional_skills"] = q_res["skill_analysis"]["additional_skills"]
+        cand_copy["component_breakdown"] = q_res["component_breakdown"]
+        cand_copy["skill_analysis"] = q_res["skill_analysis"]
+        cand_copy["experience_analysis"] = q_res["experience_analysis"]
+        processed.append(cand_copy)
 
-    total = len(records)
-    start = (page - 1) * limit
-    paginated = records[start : start + limit]
+    total = len(processed)
+    if limit <= 0:
+        paginated = processed
+    else:
+        start = max(0, (page - 1) * limit)
+        paginated = processed[start : start + limit]
 
     return {
         "candidates": paginated,
@@ -237,25 +365,69 @@ def api_get_candidates(
         "job_applied": job.get("title", "Software Engineer")
     }
 
+@app.post("/api/candidates")
+def api_add_candidate(cand: CandidateProfileModel):
+    """Registers a new candidate profile in the session."""
+    cand_dict = cand.dict()
+    c_id = cand_dict.get("candidate_id") or f"CAND_CUSTOM_{len(CUSTOM_CANDIDATES)+1}"
+    cand_dict["candidate_id"] = c_id
+    CUSTOM_CANDIDATES.append(cand_dict)
+    return {"message": "Candidate registered successfully", "candidate": cand_dict}
+
 @app.post("/api/skill-analysis")
 def api_skill_analysis(req: SkillAnalysisRequest):
-    """Evaluates matched, missing, and additional skills with skill gap metrics."""
+    """Evaluates matched, missing, and additional skills with canonical normalization."""
     c_skills = parse_skills_list(req.candidate_skills)
     result = match_skills(c_skills, req.required_skills, req.preferred_skills)
     return result
 
+@app.post("/api/skill-normalization")
+def api_skill_normalization(req: SkillNormalizationRequest):
+    """Normalizes raw input skills and returns mappings of input -> canonical."""
+    raw_list = parse_skills_list(req.skills)
+    normalized = normalize_skills_list(raw_list)
+    canonical_list = [n["canonical"] for n in normalized]
+    return {
+        "input_skills": req.skills,
+        "normalized_skills": canonical_list,
+        "mappings": normalized
+    }
+
 @app.post("/api/qualification-score")
 def api_qualification_score(req: QualScoreRequest):
-    """Computes a multi-component qualification score breakdown."""
+    """Computes a multi-component qualification score breakdown ($Score_{qual}$)."""
     job = req.job or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
     result = compute_overall_qualification_score(req.candidate, job, req.weights)
     return result
 
+@app.post("/api/evidence")
+def api_evaluate_evidence(req: EvidenceRequest):
+    """
+    Evidence Traceability Engine:
+    Extracts atomic claims from AI justification and matches against candidate profile facts.
+    """
+    job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
+    cand_data = req.candidate_data or {}
+
+    if not cand_data and req.candidate_id:
+        path = os.path.join(DATA_DIR, ACTIVE_DATASET)
+        if os.path.exists(path):
+            df = pd.read_csv(path).fillna("")
+            matches = df[df["candidate_id"] == req.candidate_id]
+            if len(matches) > 0:
+                cand_data = matches.iloc[0].to_dict()
+
+    if not cand_data:
+        cand_data = {"candidate_id": req.candidate_id or "UNKNOWN", "name": "Candidate"}
+
+    ev_res = evaluate_evidence_traceability(req.explanation, cand_data, job)
+    return ev_res
+
 @app.post("/api/evaluate")
 def api_evaluate(req: EvaluateRequest):
     """
-    Evaluates candidate against job requirements:
-    Generates AI Recommendation, Explanation, Qual Score, EFS, and BGI.
+    Complete Candidate AI Evaluation:
+    Generates AI Recommendation, Explanation, Qual Score, Evidence Traceability, EFS, and BGI.
     """
     job = req.job or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
     
@@ -281,7 +453,10 @@ def api_evaluate(req: EvaluateRequest):
     explanation = ai_eval["explanation"]
     ai_score = ai_eval.get("score") or qual_score
 
-    # 3. Explanation Faithfulness Score (EFS)
+    # 3. Evidence Traceability
+    evidence_res = evaluate_evidence_traceability(explanation, req.candidate, job)
+
+    # 4. Explanation Faithfulness Score (EFS)
     efs_res = evaluate_faithfulness_instance(
         explanation=explanation,
         qualification_score=qual_score,
@@ -292,7 +467,7 @@ def api_evaluate(req: EvaluateRequest):
         job_requirements=job
     )
 
-    # 4. Bias/Behavioral Gap Index (BGI)
+    # 5. Bias/Behavioral Gap Index (BGI)
     bgi_res = compute_bgi(
         qualification_score=qual_score,
         expected_decision=exp_decision,
@@ -308,6 +483,7 @@ def api_evaluate(req: EvaluateRequest):
         "candidate_name": req.candidate.get("name", "Candidate"),
         "job_title": job.get("title", "Software Engineer"),
         "qualification_score": qual_score,
+        "score": qual_score,  # Backward compatibility alias
         "expected_decision": exp_decision,
         "decision": decision,
         "recommendation": decision,
@@ -316,34 +492,40 @@ def api_evaluate(req: EvaluateRequest):
         "confidence": ai_eval.get("confidence", 0.90),
         "strengths": ai_eval.get("strengths", skill_analysis["matched_required_skills"]),
         "skill_gaps": ai_eval.get("skill_gaps", skill_analysis["missing_required_skills"]),
+        "evidence": evidence_res,
         "efs": efs_res,
         "bgi": bgi_res,
         "skill_analysis": skill_analysis,
         "experience_analysis": exp_analysis,
+        "component_breakdown": qual_res["component_breakdown"],
         "mitigation_applied": bool(req.mitigation)
     }
 
 @app.post("/api/bgi")
 def api_calculate_bgi(req: BGIRequest):
-    """Calculates the Bias/Behavioral Gap Index (BGI)."""
+    """Calculates the Behavioral Gap Index (BGI) with component breakdown."""
     return compute_bgi(
         qualification_score=req.qualification_score,
         expected_decision=req.expected_decision,
         ai_decision=req.ai_decision,
         ai_score=req.ai_score,
         efs_score=req.efs_score or 90.0,
-        required_skill_match=req.required_skill_match or 100.0
+        required_skill_match=req.required_skill_match or 100.0,
+        experience_match=req.experience_match or 100.0,
+        weights=req.weights
     )
 
 @app.post("/api/efs")
 def api_calculate_efs(req: EFSRequest):
-    """Calculates the Explanation Faithfulness Score (EFS)."""
+    """Calculates the Explanation Faithfulness Score (EFS) with grounding breakdown."""
     return evaluate_faithfulness_instance(
         explanation=req.explanation,
         qualification_score=req.qualification_score,
         decision=req.decision,
         skill_analysis=req.skill_analysis,
-        experience_analysis=req.experience_analysis
+        experience_analysis=req.experience_analysis,
+        candidate_data=req.candidate_data,
+        job_requirements=req.job_requirements
     )
 
 @app.get("/api/counterfactual_concepts")
@@ -383,7 +565,9 @@ def api_counterfactual(req: CounterfactualRequest):
         explanation=twin_eval["explanation"],
         qualification_score=twin_qual["qualification_score"],
         decision=twin_eval["decision"],
-        skill_analysis=twin_qual["skill_analysis"]
+        skill_analysis=twin_qual["skill_analysis"],
+        candidate_data=twin,
+        job_requirements=job
     )
     twin_bgi = compute_bgi(
         qualification_score=twin_qual["qualification_score"],
@@ -413,87 +597,186 @@ def api_counterfactual(req: CounterfactualRequest):
         "consistency_analysis": consistency
     }
 
+@app.post("/api/decision-consistency")
+def api_decision_consistency(req: DecisionConsistencyRequest):
+    """
+    Audits rank-order consistency between two candidate evaluations.
+    """
+    eval_a = req.eval_a or {}
+    eval_b = req.eval_b or {}
+    return check_pairwise_consistency(req.candidate_a, req.candidate_b, eval_a, eval_b)
+
+@app.post("/api/statistics")
+def api_statistics(req: StatisticsRequest):
+    """
+    Performs statistical significance tests (McNemar, Chi-Square, Paired t-test, Cohen's d).
+    """
+    t_type = req.test_type.lower()
+    if t_type == "mcnemar":
+        return mcnemar_test(req.original_values, req.modified_values)
+    elif t_type == "chi_square":
+        return multiclass_chi_square(req.original_values, req.modified_values)
+    elif t_type in ["paired_regression", "t_test", "ttest"]:
+        return paired_regression_test(req.original_values, req.modified_values)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown test_type '{req.test_type}'. Use 'mcnemar', 'chi_square', or 'paired_regression'.")
+
 @app.post("/api/batch-evaluate")
-def api_batch_evaluate(
-    job_id: Optional[str] = "JOB_SWE_01",
-    mode: Optional[str] = "Demo Simulation Mode",
-    model_name: Optional[str] = "qwen3.5:4b",
-    mitigation: Optional[bool] = False
-):
+def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
     """
     Audits the complete active candidate pool against selected job requirements.
-    Calculates pool-wide averages for Qual Score, Skill Match, EFS, BGI, and flagged cases.
+    Evaluates ALL candidates in the pool, isolates per-candidate errors, and calculates pool-wide metrics.
     """
-    path = os.path.join(DATA_DIR, ACTIVE_DATASET)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Dataset missing")
+    if req is None:
+        req = BatchEvaluateRequest()
 
-    df = pd.read_csv(path).fillna("")
-    job = JOB_STORE.get(job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
+    if req.candidates is not None and len(req.candidates) > 0:
+        candidates_raw = list(req.candidates)
+    else:
+        path = os.path.join(DATA_DIR, ACTIVE_DATASET)
+        candidates_raw = []
+        if os.path.exists(path):
+            df = pd.read_csv(path).fillna("")
+            candidates_raw.extend(df.to_dict(orient="records"))
+        candidates_raw.extend(CUSTOM_CANDIDATES)
+
+    if req.limit and req.limit > 0:
+        candidates_raw = candidates_raw[:req.limit]
+
+    job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
 
     results = []
-    for _, row in df.iterrows():
-        cand = row.to_dict()
-        qual_res = compute_overall_qualification_score(cand, job)
-        qual_score = qual_res["qualification_score"]
-        exp_dec = qual_res["expected_decision"]
+    failed_candidates = []
 
-        ai_res = evaluate_candidate(
-            cand, job,
-            mode=mode,
-            model_name=model_name,
-            mitigation=bool(mitigation),
-            mitigation_instruction=mitigation_instruction() if mitigation else ""
-        )
+    for idx, cand in enumerate(candidates_raw):
+        try:
+            cand_dict = dict(cand) if isinstance(cand, dict) else {"raw": str(cand)}
+            c_id = str(cand_dict.get("candidate_id", cand_dict.get("id", f"CAND_{idx+1}")))
+            c_name = str(cand_dict.get("name", f"Candidate {idx+1}"))
 
-        efs_res = evaluate_faithfulness_instance(
-            explanation=ai_res["explanation"],
-            qualification_score=qual_score,
-            decision=ai_res["decision"],
-            skill_analysis=qual_res["skill_analysis"],
-            experience_analysis=qual_res["experience_analysis"]
-        )
+            qual_res = compute_overall_qualification_score(cand_dict, job)
+            qual_score = qual_res["qualification_score"]
+            exp_dec = qual_res["expected_decision"]
 
-        bgi_res = compute_bgi(
-            qualification_score=qual_score,
-            expected_decision=exp_dec,
-            ai_decision=ai_res["decision"],
-            efs_score=efs_res["faithfulness_score"]
-        )
+            ai_res = evaluate_candidate(
+                candidate_data=cand_dict,
+                job_requirements=job,
+                mode=req.mode or "Demo Simulation Mode",
+                model_name=req.model_name or "qwen3.5:4b",
+                mitigation=bool(req.mitigation),
+                mitigation_instruction=mitigation_instruction() if req.mitigation else ""
+            )
 
-        results.append({
-            "candidate_id": cand.get("candidate_id", "CAND"),
-            "name": cand.get("name", "Candidate"),
-            "role": cand.get("role", "Engineer"),
-            "qualification_score": qual_score,
-            "required_match_percentage": qual_res["skill_analysis"]["required_match_percentage"],
-            "expected_decision": exp_dec,
-            "ai_decision": ai_res["decision"],
-            "efs_score": efs_res["faithfulness_score"],
-            "bgi_score": bgi_res["bgi_score"],
-            "flagged": bgi_res["flagged_for_audit"],
-            "bgi_tier": bgi_res["classification"],
-            "explanation": ai_res["explanation"],
-            "matched_skills": qual_res["skill_analysis"]["matched_required_skills"],
-            "missing_skills": qual_res["skill_analysis"]["missing_required_skills"]
-        })
+            decision = ai_res.get("decision", exp_dec)
+            explanation = ai_res.get("explanation", "")
+            ai_score = ai_res.get("score") if ai_res.get("score") is not None else qual_score
 
-    total = len(results)
-    avg_qual = round(sum(r["qualification_score"] for r in results) / max(1, total), 1)
-    avg_skill = round(sum(r["required_match_percentage"] for r in results) / max(1, total), 1)
-    avg_efs = round(sum(r["efs_score"] for r in results) / max(1, total), 1)
-    avg_bgi = round(sum(r["bgi_score"] for r in results) / max(1, total), 1)
-    flagged_count = sum(1 for r in results if r["flagged"])
+            efs_res = evaluate_faithfulness_instance(
+                explanation=explanation,
+                qualification_score=qual_score,
+                decision=decision,
+                skill_analysis=qual_res["skill_analysis"],
+                experience_analysis=qual_res["experience_analysis"],
+                candidate_data=cand_dict,
+                job_requirements=job
+            )
+
+            bgi_res = compute_bgi(
+                qualification_score=qual_score,
+                expected_decision=exp_dec,
+                ai_decision=decision,
+                ai_score=ai_score,
+                efs_score=efs_res["faithfulness_score"],
+                required_skill_match=qual_res["skill_analysis"]["required_match_percentage"],
+                experience_match=qual_res["experience_analysis"]["experience_match_percentage"]
+            )
+
+            cand_result = dict(cand_dict)
+            cand_result.update({
+                "candidate_id": c_id,
+                "name": c_name,
+                "role": cand_dict.get("role", "Engineer"),
+                "status": "SUCCESS",
+                "experience_years": qual_res["experience_analysis"]["candidate_experience_years"],
+                "skills": cand_dict.get("skills", ""),
+                "education": cand_dict.get("education", ""),
+                "degree": cand_dict.get("degree", ""),
+                "certifications": cand_dict.get("certifications", ""),
+                "qualification_score": qual_score,
+                "score": qual_score,
+                "required_match_percentage": qual_res["skill_analysis"]["required_match_percentage"],
+                "preferred_match_percentage": qual_res["skill_analysis"]["preferred_match_percentage"],
+                "expected_decision": exp_dec,
+                "ai_decision": decision,
+                "decision": decision,
+                "ai_score": ai_score,
+                "efs_score": efs_res["faithfulness_score"],
+                "efs_breakdown": efs_res["breakdown"],
+                "bgi_score": bgi_res["bgi_score"],
+                "bgi_components": bgi_res["components"],
+                "flagged": bgi_res["flagged_for_audit"],
+                "bgi_tier": bgi_res["classification"],
+                "explanation": explanation,
+                "matched_skills": qual_res["skill_analysis"]["matched_required_skills"],
+                "missing_skills": qual_res["skill_analysis"]["missing_required_skills"],
+                "matched_preferred_skills": qual_res["skill_analysis"]["matched_preferred_skills"],
+                "missing_preferred_skills": qual_res["skill_analysis"]["missing_preferred_skills"],
+                "additional_skills": qual_res["skill_analysis"]["additional_skills"],
+                "component_breakdown": qual_res["component_breakdown"],
+                "skill_analysis": qual_res["skill_analysis"],
+                "experience_analysis": qual_res["experience_analysis"]
+            })
+            results.append(cand_result)
+        except Exception as e:
+            failed_candidates.append({
+                "candidate_id": cand.get("candidate_id", f"CAND_{idx+1}") if isinstance(cand, dict) else f"CAND_{idx+1}",
+                "name": cand.get("name", "Unknown") if isinstance(cand, dict) else "Unknown",
+                "status": "ERROR",
+                "error": str(e),
+                "qualification_score": 0.0,
+                "score": 0.0,
+                "required_match_percentage": 0.0,
+                "bgi_score": 0.0,
+                "efs_score": 0.0,
+                "flagged": True
+            })
+
+    total = len(candidates_raw)
+    evaluated_count = len(results)
+    failed_count = len(failed_candidates)
+
+    if evaluated_count > 0:
+        avg_qual = round(sum(r["qualification_score"] for r in results) / evaluated_count, 1)
+        avg_skill = round(sum(r["required_match_percentage"] for r in results) / evaluated_count, 1)
+        avg_efs = round(sum(r["efs_score"] for r in results) / evaluated_count, 1)
+        avg_bgi = round(sum(r["bgi_score"] for r in results) / evaluated_count, 1)
+        flagged_count = sum(1 for r in results if r.get("flagged", False)) + failed_count
+        pool_consistency = evaluate_pool_consistency(results)
+    else:
+        avg_qual = 0.0
+        avg_skill = 0.0
+        avg_efs = 0.0
+        avg_bgi = 0.0
+        flagged_count = failed_count
+        pool_consistency = {"status": "NO_VALID_CANDIDATES", "inconsistent_pairs": 0, "total_pairs_checked": 0}
+
+    all_output_candidates = results + failed_candidates
 
     return {
+        "job_id": job.get("job_id", req.job_id),
         "job_title": job.get("title", "Software Engineer"),
         "total_candidates": total,
+        "evaluated_candidates": evaluated_count,
+        "failed_candidates": failed_count,
+        "flagged_cases": flagged_count,
+        "flagged_candidates_count": flagged_count,
         "average_qualification_score": avg_qual,
         "average_skill_match_percentage": avg_skill,
         "average_efs": avg_efs,
         "average_bgi": avg_bgi,
-        "flagged_candidates_count": flagged_count,
-        "candidates": results
+        "pool_consistency": pool_consistency,
+        "candidates": all_output_candidates,
+        "errors": failed_candidates
     }
 
 @app.post("/api/mitigation")
@@ -505,7 +788,6 @@ def api_run_mitigation(req: MitigationRequest):
     cands = req.candidates or []
 
     if not cands:
-        # Load sample from active dataset
         path = os.path.join(DATA_DIR, ACTIVE_DATASET)
         if os.path.exists(path):
             cands = pd.read_csv(path).fillna("").to_dict(orient="records")[:10]
@@ -519,7 +801,7 @@ def api_run_mitigation(req: MitigationRequest):
 
         # Before (No Mitigation)
         b_ai = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name, mitigation=False)
-        b_efs = evaluate_faithfulness_instance(b_ai["explanation"], q_score, b_ai["decision"], qual_res["skill_analysis"])
+        b_efs = evaluate_faithfulness_instance(b_ai["explanation"], q_score, b_ai["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
         b_bgi = compute_bgi(q_score, qual_res["expected_decision"], b_ai["decision"], efs_score=b_efs["faithfulness_score"])
         
         before_evals.append({
@@ -532,9 +814,9 @@ def api_run_mitigation(req: MitigationRequest):
             "explanation": b_ai["explanation"]
         })
 
-        # After (With Mitigation)
+        # After (With In-Context Mitigation)
         a_ai = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name, mitigation=True, mitigation_instruction=mitigation_instruction())
-        a_efs = evaluate_faithfulness_instance(a_ai["explanation"], q_score, a_ai["decision"], qual_res["skill_analysis"])
+        a_efs = evaluate_faithfulness_instance(a_ai["explanation"], q_score, a_ai["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
         a_bgi = compute_bgi(q_score, qual_res["expected_decision"], a_ai["decision"], efs_score=a_efs["faithfulness_score"])
 
         after_evals.append({
@@ -555,6 +837,171 @@ def api_run_mitigation(req: MitigationRequest):
         "after_evaluations": after_evals
     }
 
+@app.post("/api/re-evaluate")
+def api_re_evaluate(req: ReEvaluateRequest):
+    """
+    Re-evaluates a candidate under mitigation instructions to verify consistency recovery.
+    """
+    job = req.job or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
+    instr = req.mitigation_instruction or mitigation_instruction()
+
+    qual_res = compute_overall_qualification_score(req.candidate, job)
+    ai_res = evaluate_candidate(
+        req.candidate, job,
+        mode=req.mode,
+        model_name=req.model_name,
+        mitigation=True,
+        mitigation_instruction=instr
+    )
+
+    efs_res = evaluate_faithfulness_instance(
+        ai_res["explanation"],
+        qual_res["qualification_score"],
+        ai_res["decision"],
+        qual_res["skill_analysis"],
+        candidate_data=req.candidate,
+        job_requirements=job
+    )
+
+    bgi_res = compute_bgi(
+        qual_res["qualification_score"],
+        qual_res["expected_decision"],
+        ai_res["decision"],
+        efs_score=efs_res["faithfulness_score"]
+    )
+
+    return {
+        "candidate": req.candidate,
+        "qualification_analysis": qual_res,
+        "re_evaluation": ai_res,
+        "efs": efs_res,
+        "bgi": bgi_res,
+        "mitigation_instruction_used": instr
+    }
+
+@app.post("/api/resume-screen")
+def api_resume_screen(req: ResumeScreenRequest):
+    """
+    End-to-end Resume Screening:
+    Parses resume text or candidate profile, matches skills, calculates $Score_{qual}$, EFS, and BGI.
+    """
+    job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
+    cand = dict(req.candidate_data or {})
+
+    # If raw resume text is provided, extract structured attributes
+    if req.resume_text and not cand.get("skills"):
+        text = req.resume_text
+        cand["name"] = cand.get("name") or "Applicant"
+        cand["role"] = cand.get("role") or job.get("title", "Engineer")
+        cand["education"] = cand.get("education") or ("B.Tech Computer Science" if "computer science" in text.lower() else "Bachelor Degree")
+        
+        years = re.search(r'(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years?|yrs?)', text, re.IGNORECASE)
+        cand["experience_years"] = float(years.group(1)) if years else float(cand.get("experience_years", 3.0))
+        
+        # Skill extraction
+        extracted_skills = []
+        for raw_s, canon in KNOWN_ALIASES.items():
+            if len(raw_s) >= 3 and re.search(rf'\b{re.escape(raw_s)}\b', text, re.IGNORECASE):
+                if canon not in extracted_skills:
+                    extracted_skills.append(canon)
+        cand["skills"] = extracted_skills if extracted_skills else ["Python", "SQL", "Git"]
+        cand["projects"] = "Resume Experience and Portfolio"
+
+    qual_res = compute_overall_qualification_score(cand, job)
+    ai_eval = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name)
+
+    efs_res = evaluate_faithfulness_instance(
+        ai_eval["explanation"],
+        qual_res["qualification_score"],
+        ai_eval["decision"],
+        qual_res["skill_analysis"],
+        candidate_data=cand,
+        job_requirements=job
+    )
+
+    bgi_res = compute_bgi(
+        qual_res["qualification_score"],
+        qual_res["expected_decision"],
+        ai_eval["decision"],
+        efs_score=efs_res["faithfulness_score"]
+    )
+
+    evidence_res = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
+
+    return {
+        "candidate": cand,
+        "job_applied": job,
+        "qualification_analysis": qual_res,
+        "ai_evaluation": ai_eval,
+        "evidence": evidence_res,
+        "efs_assessment": efs_res,
+        "bgi_audit": bgi_res
+    }
+
+@app.get("/api/report/{candidate_id}")
+def api_candidate_report(candidate_id: str, job_id: Optional[str] = "JOB_SWE_01"):
+    """Generates a complete audit dossier report for a single candidate."""
+    path = os.path.join(DATA_DIR, ACTIVE_DATASET)
+    cand = None
+
+    if os.path.exists(path):
+        df = pd.read_csv(path).fillna("")
+        matches = df[df["candidate_id"] == candidate_id]
+        if len(matches) > 0:
+            cand = matches.iloc[0].to_dict()
+
+    if not cand:
+        for c in CUSTOM_CANDIDATES:
+            if c.get("candidate_id") == candidate_id:
+                cand = c
+                break
+
+    if not cand:
+        raise HTTPException(status_code=404, detail=f"Candidate ID '{candidate_id}' not found")
+
+    job = JOB_STORE.get(job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
+
+    qual_res = compute_overall_qualification_score(cand, job)
+    ai_eval = evaluate_candidate(cand, job)
+    efs = evaluate_faithfulness_instance(ai_eval["explanation"], qual_res["qualification_score"], ai_eval["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
+    bgi = compute_bgi(qual_res["qualification_score"], qual_res["expected_decision"], ai_eval["decision"], efs_score=efs["faithfulness_score"])
+    ev = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
+
+    return {
+        "candidate": cand,
+        "job_applied": job,
+        "qualification_analysis": qual_res,
+        "ai_evaluation": ai_eval,
+        "evidence": ev,
+        "efs_assessment": efs,
+        "bgi_audit": bgi
+    }
+
+@app.post("/api/export-report")
+def api_export_report(req: ExportReportRequest):
+    """Exports candidate audit dossier as structured JSON or formatted CSV."""
+    report = api_candidate_report(req.candidate_id, req.job_id)
+    if req.format.lower() == "csv":
+        # Flatten dictionary to tabular CSV
+        flat_dict = {
+            "candidate_id": req.candidate_id,
+            "name": report["candidate"].get("name"),
+            "job_title": report["job_applied"].get("title"),
+            "qualification_score": report["qualification_analysis"]["qualification_score"],
+            "expected_decision": report["qualification_analysis"]["expected_decision"],
+            "ai_decision": report["ai_evaluation"]["decision"],
+            "efs_score": report["efs_assessment"]["faithfulness_score"],
+            "efs_tier": report["efs_assessment"]["classification"],
+            "bgi_score": report["bgi_audit"]["bgi_score"],
+            "bgi_tier": report["bgi_audit"]["classification"],
+            "flagged_for_audit": report["bgi_audit"]["flagged_for_audit"],
+            "explanation": report["ai_evaluation"]["explanation"]
+        }
+        df_exp = pd.DataFrame([flat_dict])
+        csv_str = df_exp.to_csv(index=False)
+        return PlainTextResponse(content=csv_str, media_type="text/csv")
+    return report
+
 @app.post("/api/cluster")
 def api_cluster(n_clusters: int = Query(3, ge=2, le=5)):
     """Clusters candidate pool using TF-IDF and K-Means on qualification profiles."""
@@ -571,35 +1018,6 @@ def api_cluster(n_clusters: int = Query(3, ge=2, le=5)):
         "n_clusters": n_clusters,
         "cluster_summary": summary,
         "candidates": df_clustered.to_dict(orient="records")
-    }
-
-@app.get("/api/report/{candidate_id}")
-def api_candidate_report(candidate_id: str, job_id: Optional[str] = "JOB_SWE_01"):
-    """Generates a complete audit dossier report for a single candidate."""
-    path = os.path.join(DATA_DIR, ACTIVE_DATASET)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Dataset missing")
-
-    df = pd.read_csv(path).fillna("")
-    matches = df[df["candidate_id"] == candidate_id]
-    if len(matches) == 0:
-        raise HTTPException(status_code=404, detail="Candidate ID not found")
-
-    cand = matches.iloc[0].to_dict()
-    job = JOB_STORE.get(job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
-
-    qual_res = compute_overall_qualification_score(cand, job)
-    ai_eval = evaluate_candidate(cand, job)
-    efs = evaluate_faithfulness_instance(ai_eval["explanation"], qual_res["qualification_score"], ai_eval["decision"], qual_res["skill_analysis"])
-    bgi = compute_bgi(qual_res["qualification_score"], qual_res["expected_decision"], ai_eval["decision"], efs_score=efs["faithfulness_score"])
-
-    return {
-        "candidate": cand,
-        "job_applied": job,
-        "qualification_analysis": qual_res,
-        "ai_evaluation": ai_eval,
-        "efs_assessment": efs,
-        "bgi_audit": bgi
     }
 
 # ============================================================================
@@ -628,4 +1046,3 @@ if __name__ == "__main__":
 
     threading.Thread(target=open_browser, daemon=True).start()
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
-

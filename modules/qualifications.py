@@ -6,6 +6,17 @@ skill gap analysis, and configurable multi-criteria qualification scoring.
 
 from typing import Dict, List, Any, Optional, Set
 import re
+from modules.skill_normalization import (
+    canonicalize_skill,
+    normalize_skill,
+    normalize_skills_list,
+    get_canonical_skills
+)
+from modules.skill_analysis import (
+    match_skills,
+    parse_skills_list,
+    normalize_skill_string
+)
 
 DEFAULT_JOB_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "JOB_SWE_01": {
@@ -63,80 +74,20 @@ DEFAULT_SCORING_WEIGHTS: Dict[str, float] = {
     "projects": 0.05
 }
 
-def normalize_skill_string(skill: str) -> str:
-    s = str(skill).strip().lower()
-    s = re.sub(r'[\/\-_]', ' ', s)
-    s = re.sub(r'\s+', ' ', s)
-    return s
-
-def parse_skills_list(skills_input: Any) -> List[str]:
-    if isinstance(skills_input, list):
-        return [str(s).strip() for s in skills_input if str(s).strip()]
-    if isinstance(skills_input, str):
-        parts = re.split(r'[,;|\n]+', skills_input)
-        return [p.strip() for p in parts if p.strip()]
-    return []
-
-def match_skills(
-    candidate_skills: List[str],
-    required_skills: List[str],
-    preferred_skills: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    cand_norm_map = {normalize_skill_string(s): s for s in candidate_skills if s}
-    req_norm_map = {normalize_skill_string(s): s for s in required_skills if s}
-    pref_norm_map = {normalize_skill_string(s): s for s in (preferred_skills or []) if s}
-
-    cand_set = set(cand_norm_map.keys())
-    req_set = set(req_norm_map.keys())
-    pref_set = set(pref_norm_map.keys())
-
-    matched_req_keys = cand_set.intersection(req_set)
-    matched_required = [req_norm_map[k] for k in matched_req_keys]
-
-    missing_req_keys = req_set - cand_set
-    missing_required = [req_norm_map[k] for k in missing_req_keys]
-
-    matched_pref_keys = cand_set.intersection(pref_set)
-    matched_preferred = [pref_norm_map[k] for k in matched_pref_keys]
-
-    missing_pref_keys = pref_set - cand_set
-    missing_preferred = [pref_norm_map[k] for k in missing_pref_keys]
-
-    all_job_keys = req_set.union(pref_set)
-    additional_keys = cand_set - all_job_keys
-    additional_skills = [cand_norm_map[k] for k in additional_keys]
-
-    total_req = max(1, len(required_skills))
-    req_match_ratio = len(matched_required) / total_req
-    req_match_pct = round(req_match_ratio * 100.0, 1)
-
-    total_pref = len(preferred_skills or [])
-    pref_match_ratio = (len(matched_preferred) / total_pref) if total_pref > 0 else 1.0
-    pref_match_pct = round(pref_match_ratio * 100.0, 1)
-
-    skill_gap_ratio = len(missing_required) / total_req
-    skill_gap_pct = round(skill_gap_ratio * 100.0, 1)
-
-    return {
-        "matched_required_skills": matched_required,
-        "missing_required_skills": missing_required,
-        "matched_preferred_skills": matched_preferred,
-        "missing_preferred_skills": missing_preferred,
-        "additional_skills": additional_skills,
-        "required_skills_count": len(required_skills),
-        "matched_required_count": len(matched_required),
-        "missing_required_count": len(missing_required),
-        "required_match_percentage": req_match_pct,
-        "preferred_match_percentage": pref_match_pct,
-        "skill_gap_percentage": skill_gap_pct
-    }
-
 def evaluate_experience_match(
-    candidate_exp: float,
-    minimum_exp: float
+    candidate_exp: Any,
+    minimum_exp: Any
 ) -> Dict[str, Any]:
-    cand_exp = max(0.0, float(candidate_exp or 0.0))
-    min_exp = max(0.0, float(minimum_exp or 0.0))
+    """Computes experience match percentage and gap against minimum job requirement."""
+    try:
+        cand_exp = max(0.0, float(candidate_exp if candidate_exp is not None else 0.0))
+    except (ValueError, TypeError):
+        cand_exp = 0.0
+
+    try:
+        min_exp = max(0.0, float(minimum_exp if minimum_exp is not None else 0.0))
+    except (ValueError, TypeError):
+        min_exp = 0.0
 
     if min_exp <= 0.0:
         exp_score = 100.0
@@ -159,24 +110,102 @@ def evaluate_education_relevance(
     candidate_education: str,
     required_education: str = ""
 ) -> float:
-    edu_str = str(candidate_education or "").lower()
-    if any(k in edu_str for k in ["ph.d", "doctorate"]):
-        return 100.0
-    if any(k in edu_str for k in ["m.s.", "m.tech", "master", "mca"]):
-        return 95.0
-    if any(k in edu_str for k in ["b.tech", "b.e.", "b.s.", "bachelor", "bca"]):
-        return 85.0
-    if any(k in edu_str for k in ["associate", "diploma"]):
-        return 65.0
-    if any(k in edu_str for k in ["bootcamp", "certificate"]):
-        return 60.0
-    return 50.0
+    """
+    Evaluates candidate degree level and technical major relevance against job criteria.
+    Factors in degree level (Ph.D., Master's, Bachelor's, Associate, Bootcamp)
+    and field-of-study alignment (CS/IT vs. Adjacent STEM vs. Unrelated fields).
+    """
+    edu_str = str(candidate_education or "").lower().strip()
+    if not edu_str:
+        return 50.0
+
+    # 1. Degree level base score
+    if any(k in edu_str for k in ["ph.d", "phd", "doctorate"]):
+        base_score = 100.0
+    elif any(k in edu_str for k in ["m.s.", "ms in", "m.tech", "master", "mca", "m.sc", "msc"]):
+        base_score = 95.0
+    elif any(k in edu_str for k in ["b.tech", "b.e.", "b.s.", "bs in", "bachelor", "bca", "b.sc", "bsc"]):
+        base_score = 85.0
+    elif any(k in edu_str for k in ["associate", "diploma"]):
+        base_score = 65.0
+    elif any(k in edu_str for k in ["bootcamp", "certificate"]):
+        base_score = 60.0
+    else:
+        base_score = 70.0
+
+    # 2. Field-of-study relevance keywords
+    unrelated_keywords = [
+        "history", "fine arts", "fine art", "art", "arts", "literature",
+        "philosophy", "music", "humanities", "biology", "sociology",
+        "psychology", "theology"
+    ]
+    adjacent_keywords = [
+        "mechanical", "civil", "chemical", "electrical", "electronics",
+        "aerospace", "industrial", "physics", "chemistry", "mathematics",
+        "math", "statistics", "biomedical"
+    ]
+
+    is_unrelated = any(re.search(r'\b' + re.escape(kw) + r'\b', edu_str) for kw in unrelated_keywords)
+    is_adjacent = any(re.search(r'\b' + re.escape(kw) + r'\b', edu_str) for kw in adjacent_keywords)
+    is_cs = any(cs in edu_str for cs in ["computer", "computing", "software", "information technology", "data science", "data analytics", "artificial intelligence", "cs", "it"])
+
+    if is_unrelated and not is_cs:
+        multiplier = 0.60
+    elif is_adjacent and not is_cs:
+        multiplier = 0.85
+    else:
+        multiplier = 1.0
+
+    return round(base_score * multiplier, 1)
+
+def evaluate_projects_score(candidate_data: Dict[str, Any]) -> float:
+    """
+    Evaluates project score strictly from project portfolio data.
+    DO NOT derive project score from interview score.
+    """
+    # 1. Explicit projects_score if provided
+    if "projects_score" in candidate_data and candidate_data["projects_score"] is not None:
+        try:
+            return max(0.0, min(100.0, float(candidate_data["projects_score"])))
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Evaluate from projects text / list if present
+    proj = candidate_data.get("projects", candidate_data.get("project", ""))
+    if isinstance(proj, list):
+        count = len(proj)
+        if count >= 3:
+            return 95.0
+        elif count == 2:
+            return 85.0
+        elif count == 1:
+            return 75.0
+        return 50.0
+    elif isinstance(proj, str) and proj.strip():
+        p_clean = proj.strip()
+        if len(p_clean) > 30 or "," in p_clean or ";" in p_clean:
+            return 85.0
+        return 75.0
+
+    # 3. Missing project data: neutral baseline (do not fabricate, do not penalize unfairly)
+    return 60.0
 
 def compute_overall_qualification_score(
     candidate_data: Dict[str, Any],
     job_requirements: Optional[Dict[str, Any]] = None,
     weights: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any]:
+    """
+    Calculates multi-criteria qualification score (0-100) using job-related factors:
+    - Required Skills (40%)
+    - Preferred Skills (10%)
+    - Relevant Experience (25%)
+    - Education Relevance (15%)
+    - Certifications (5%)
+    - Projects Portfolio (5%)
+    
+    Technical interview score is stored separately and NOT substituted into project score.
+    """
     job = job_requirements or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
     w = weights or DEFAULT_SCORING_WEIGHTS
 
@@ -185,15 +214,23 @@ def compute_overall_qualification_score(
     pref_skills = parse_skills_list(job.get("preferred_skills", []))
 
     skill_analysis = match_skills(cand_skills, req_skills, pref_skills)
-    cand_exp = float(candidate_data.get("experience_years", candidate_data.get("experience", 0)) or 0)
-    min_exp = float(job.get("minimum_experience", 2.0))
+    try:
+        cand_exp = float(candidate_data.get("experience_years", candidate_data.get("experience", 0)) or 0)
+    except (ValueError, TypeError):
+        cand_exp = 0.0
+
+    try:
+        min_exp = float(job.get("minimum_experience", 2.0) or 2.0)
+    except (ValueError, TypeError):
+        min_exp = 2.0
+
     exp_analysis = evaluate_experience_match(cand_exp, min_exp)
 
     cand_edu = str(candidate_data.get("education", candidate_data.get("degree", "")))
     req_edu = str(job.get("required_education", ""))
     edu_score = evaluate_education_relevance(cand_edu, req_edu)
 
-    # Robust certification parsing
+    # Certification evaluation
     certs = candidate_data.get("certifications_count", candidate_data.get("certifications", 0))
     if isinstance(certs, list):
         cert_count = len(certs)
@@ -207,8 +244,21 @@ def compute_overall_qualification_score(
 
     cert_score = min(100.0, cert_count * 50.0) if cert_count > 0 else 40.0
 
-    interview_score = float(candidate_data.get("interview_score", candidate_data.get("score", 75)) or 75)
-    proj_score = min(100.0, max(0.0, interview_score))
+    # Project score: purely from project data
+    proj_score = evaluate_projects_score(candidate_data)
+
+    # Technical interview score: kept completely separate if present
+    technical_interview_score = None
+    if "technical_interview_score" in candidate_data and candidate_data["technical_interview_score"] is not None:
+        try:
+            technical_interview_score = float(candidate_data["technical_interview_score"])
+        except (ValueError, TypeError):
+            pass
+    elif "interview_score" in candidate_data and candidate_data["interview_score"] is not None:
+        try:
+            technical_interview_score = float(candidate_data["interview_score"])
+        except (ValueError, TypeError):
+            pass
 
     req_skill_contrib = (w.get("required_skills", 0.40) * skill_analysis["required_match_percentage"])
     pref_skill_contrib = (w.get("preferred_skills", 0.10) * skill_analysis["preferred_match_percentage"])
@@ -232,21 +282,27 @@ def compute_overall_qualification_score(
     else:
         expected_decision = "REJECT"
 
+    component_breakdown = {
+        "required_skills_score": skill_analysis["required_match_percentage"],
+        "preferred_skills_score": skill_analysis["preferred_match_percentage"],
+        "experience_score": exp_analysis["experience_match_percentage"],
+        "education_score": edu_score,
+        "certifications_score": cert_score,
+        "projects_score": proj_score,
+        "project_performance_score": proj_score  # Backward compatibility alias
+    }
+    if technical_interview_score is not None:
+        component_breakdown["technical_interview_score"] = technical_interview_score
+
     return {
         "qualification_score": overall_score,
         "expected_decision": expected_decision,
-        "component_breakdown": {
-            "required_skills_score": skill_analysis["required_match_percentage"],
-            "preferred_skills_score": skill_analysis["preferred_match_percentage"],
-            "experience_score": exp_analysis["experience_match_percentage"],
-            "education_score": edu_score,
-            "certifications_score": cert_score,
-            "project_performance_score": proj_score
-        },
+        "component_breakdown": component_breakdown,
         "weights_applied": w,
         "skill_analysis": skill_analysis,
         "experience_analysis": exp_analysis,
         "candidate_id": candidate_data.get("candidate_id", "UNKNOWN"),
         "candidate_name": candidate_data.get("name", "Candidate"),
-        "job_title": job.get("title", "Software Engineer")
+        "job_title": job.get("title", "Software Engineer"),
+        "technical_interview_score": technical_interview_score
     }

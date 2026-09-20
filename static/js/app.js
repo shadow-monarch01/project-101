@@ -1,6 +1,6 @@
 /**
- * AI Hiring Intelligence - Frontend Client Engine
- * Qualification Assessment, EFS & Bias Gap Analysis (BGI)
+ * AI Hiring Intelligence System - Frontend Client Engine
+ * Qualification Assessment, Evidence Traceability, EFS & Bias Gap Analysis (BGI)
  */
 
 let state = {
@@ -98,6 +98,12 @@ function setupEventListeners() {
         document.querySelector('[data-tab="tab-playground"]').click();
     });
 
+    // Inspect Evidence button
+    document.getElementById("btn-inspect-evidence").addEventListener("click", async () => {
+        if (!state.selectedCandidate) return;
+        await fetchAndRenderEvidence(state.selectedCandidate);
+    });
+
     // Counterfactual Execution
     document.getElementById("btn-run-cf-eval").addEventListener("click", runCounterfactualEvaluation);
 
@@ -186,7 +192,7 @@ async function fetchDatasets() {
 
 async function loadCandidatePool() {
     try {
-        const res = await fetch(`/api/candidates?job_id=${state.activeJobId}&limit=50`);
+        const res = await fetch(`/api/candidates?job_id=${state.activeJobId}&limit=1000`);
         const data = await res.json();
         state.candidatePool = data.candidates || [];
         renderCandidateTable(state.candidatePool);
@@ -302,15 +308,16 @@ function renderSelectedCandidateCard(cand) {
     document.getElementById("sel-cand-role").innerText = cand.role || "Software Engineer";
     document.getElementById("sel-cand-id").innerText = cand.candidate_id;
 
-    document.getElementById("sel-cand-qual-score").innerText = `${cand.qualification_score || 85}%`;
-    document.getElementById("sel-cand-skill-match").innerText = `${cand.required_match_percentage || 100}%`;
-    document.getElementById("sel-cand-exp").innerText = `${cand.experience_years || 0} Years`;
+    const expYears = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : 0);
+    document.getElementById("sel-cand-qual-score").innerText = `${cand.qualification_score != null ? cand.qualification_score : 85}%`;
+    document.getElementById("sel-cand-skill-match").innerText = `${cand.required_match_percentage != null ? cand.required_match_percentage : 100}%`;
+    document.getElementById("sel-cand-exp").innerText = `${expYears} Years`;
     document.getElementById("sel-cand-edu").innerText = cand.education || "B.Tech Computer Science";
     document.getElementById("sel-cand-certs").innerText = cand.certifications || "Verified";
 
     const expBadge = document.getElementById("sel-cand-exp-dec");
     expBadge.innerText = cand.expected_decision || "STRONG_HIRE";
-    expBadge.className = `badge ${cand.expected_decision === "STRONG_HIRE" ? "badge-success" : "badge-info"}`;
+    expBadge.className = `badge ${cand.expected_decision === "STRONG_HIRE" ? "badge-success" : (cand.expected_decision === "REJECT" ? "badge-danger" : "badge-info")}`;
 
     // Tag Clouds
     const matchCloud = document.getElementById("sel-matched-skills");
@@ -335,7 +342,80 @@ function renderSelectedCandidateCard(cand) {
     }
 
     const addCloud = document.getElementById("sel-additional-skills");
-    addCloud.innerHTML = `<span class="skill-tag skill-pref">+ Microservices</span><span class="skill-tag skill-pref">+ PostgreSQL</span>`;
+    addCloud.innerHTML = "";
+    const addSkills = cand.additional_skills || [];
+    if (addSkills.length > 0) {
+        addSkills.forEach(s => {
+            const sp = document.createElement("span");
+            sp.className = "skill-tag skill-pref";
+            sp.innerText = `+ ${s}`;
+            addCloud.appendChild(sp);
+        });
+    } else {
+        addCloud.innerHTML = `<span class="text-muted">None</span>`;
+    }
+
+    // Populate EFS & BGI breakdown meters from actual candidate data / breakdowns
+    const efsB = cand.efs_breakdown || {};
+    document.getElementById("sel-efs-skill").innerText = `${efsB.skill_grounding != null ? efsB.skill_grounding : (cand.required_match_percentage || 95)}%`;
+    document.getElementById("sel-efs-exp").innerText = `${efsB.experience_grounding != null ? efsB.experience_grounding : (expYears >= 4 ? 100 : 80)}%`;
+    document.getElementById("sel-efs-edu").innerText = `${efsB.education_grounding != null ? efsB.education_grounding : 95}%`;
+    document.getElementById("sel-efs-dec").innerText = `${efsB.decision_grounding != null ? efsB.decision_grounding : 95}%`;
+
+    const bgiC = cand.bgi_components || {};
+    const qualGap = bgiC.qualification_gap != null ? bgiC.qualification_gap : Math.abs((cand.qualification_score || 0) - (cand.ai_score || cand.qualification_score || 0));
+    const decGap = bgiC.decision_gap != null ? bgiC.decision_gap : 0.0;
+    const explGap = bgiC.explanation_gap != null ? bgiC.explanation_gap : Math.max(0, 100 - (cand.efs_score || 90));
+
+    document.getElementById("sel-bgi-qual").innerText = Number(qualGap).toFixed(1);
+    document.getElementById("sel-bgi-dec").innerText = Number(decGap).toFixed(1);
+    document.getElementById("sel-bgi-expl").innerText = Number(explGap).toFixed(1);
+
+    // Auto-fetch evidence claims
+    fetchAndRenderEvidence(cand);
+}
+
+async function fetchAndRenderEvidence(cand) {
+    try {
+        const expYears = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : 0);
+        const explanation = cand.explanation || `Candidate exhibits competence in ${(cand.matched_skills || ['Python']).join(', ')} with ${expYears} years domain background.`;
+        const res = await fetch("/api/evidence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                candidate_id: cand.candidate_id,
+                job_id: state.activeJobId,
+                explanation: explanation,
+                candidate_data: cand
+            })
+        });
+        const data = await res.json();
+
+        document.getElementById("ev-stat-supported").innerText = `Supported: ${data.supported_claims || 0}`;
+        document.getElementById("ev-stat-partial").innerText = `Partial: ${data.partial_claims || 0}`;
+        document.getElementById("ev-stat-unsupported").innerText = `Unsupported: ${data.unsupported_claims || 0}`;
+        document.getElementById("ev-stat-contradicted").innerText = `Contradicted: ${data.contradicted_claims || 0}`;
+
+        const tbody = document.getElementById("evidence-claims-tbody");
+        tbody.innerHTML = "";
+        (data.claims || []).forEach(c => {
+            const tr = document.createElement("tr");
+            let badgeClass = "badge-success";
+            if (c.status === "PARTIALLY_SUPPORTED") badgeClass = "badge-info";
+            if (c.status === "UNSUPPORTED") badgeClass = "badge-warning";
+            if (c.status === "CONTRADICTED") badgeClass = "badge-danger";
+
+            tr.innerHTML = `
+                <td>${c.claim}</td>
+                <td><code>${c.source_field}</code></td>
+                <td>${Array.isArray(c.evidence) ? c.evidence.join(', ') : c.evidence}</td>
+                <td><span class="badge ${badgeClass}">${c.status}</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.warn("Evidence fetch error:", e);
+    }
 }
 
 function filterCandidateTable(query) {
@@ -357,6 +437,13 @@ function filterCandidateTable(query) {
 // Batch Pool Audit & KPI Computation
 // ============================================================================
 async function runBatchAudit() {
+    const btn = document.getElementById("btn-run-batch-audit");
+    const originalText = btn ? btn.innerHTML : "🚀 Run Full Candidate Pool Audit";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Auditing Full Pool...';
+    }
+
     try {
         const res = await fetch("/api/batch-evaluate", {
             method: "POST",
@@ -366,21 +453,41 @@ async function runBatchAudit() {
                 mode: state.evalMode
             })
         });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `Server error (HTTP ${res.status})`);
+        }
+
         const data = await res.json();
 
-        document.getElementById("kpi-total-cands").innerText = data.total_candidates || state.candidatePool.length;
-        document.getElementById("kpi-avg-qual").innerText = `${data.average_qualification_score || 84.5}%`;
-        document.getElementById("kpi-avg-skill").innerText = `${data.average_skill_match_percentage || 88.0}%`;
-        document.getElementById("kpi-avg-efs").innerText = `${data.average_efs || 92.4} / 100`;
-        document.getElementById("kpi-avg-bgi").innerText = `${data.average_bgi || 14.8} / 100`;
-        document.getElementById("kpi-flagged-count").innerText = data.flagged_candidates_count || 0;
+        // Update KPIs with real evaluated metrics (no hardcoded fake fallbacks)
+        const totalCount = data.total_candidates !== undefined ? data.total_candidates : state.candidatePool.length;
+        const avgQual = data.average_qualification_score !== undefined ? data.average_qualification_score : 0.0;
+        const avgSkill = data.average_skill_match_percentage !== undefined ? data.average_skill_match_percentage : 0.0;
+        const avgEfs = data.average_efs !== undefined ? data.average_efs : 0.0;
+        const avgBgi = data.average_bgi !== undefined ? data.average_bgi : 0.0;
+        const flaggedCount = data.flagged_candidates_count !== undefined ? data.flagged_candidates_count : 0;
+
+        document.getElementById("kpi-total-cands").innerText = totalCount;
+        document.getElementById("kpi-avg-qual").innerText = `${avgQual}%`;
+        document.getElementById("kpi-avg-skill").innerText = `${avgSkill}%`;
+        document.getElementById("kpi-avg-efs").innerText = `${avgEfs} / 100`;
+        document.getElementById("kpi-avg-bgi").innerText = `${avgBgi} / 100`;
+        document.getElementById("kpi-flagged-count").innerText = flaggedCount;
 
         if (data.candidates && data.candidates.length > 0) {
             state.candidatePool = data.candidates;
             renderCandidateTable(state.candidatePool);
+            populatePlaygroundCandidateSelector(state.candidatePool);
         }
     } catch (e) {
         console.error("Batch audit error:", e);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 
@@ -438,12 +545,25 @@ function populatePlaygroundCandidateSelector(candidates) {
 }
 
 function populatePlaygroundWithCandidate(cand) {
+    const exp = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : 0);
+    const skills = cand.skills || (cand.matched_skills ? cand.matched_skills.join(", ") : "Python, SQL");
+    const qual = cand.qualification_score != null ? cand.qualification_score : 85;
+    const dec = cand.expected_decision || "STRONG_HIRE";
+
     document.getElementById("cf-candidate-selector").value = cand.candidate_id;
     document.getElementById("cf-orig-name").innerText = cand.name || "Candidate";
-    document.getElementById("cf-orig-skills").innerText = cand.skills || "Python, SQL";
-    document.getElementById("cf-orig-exp").innerText = `${cand.experience_years || 0} Years`;
-    document.getElementById("cf-orig-qual").innerText = `${cand.qualification_score || 85}%`;
-    document.getElementById("cf-orig-dec").innerText = cand.expected_decision || "STRONG_HIRE";
+    document.getElementById("cf-orig-skills").innerText = skills;
+    document.getElementById("cf-orig-exp").innerText = `${exp} Years`;
+    document.getElementById("cf-orig-qual").innerText = `${qual}%`;
+    document.getElementById("cf-orig-dec").innerText = dec;
+    document.getElementById("cf-orig-expl").innerText = cand.explanation || "Select a perturbation concept and click Execute Causal Evaluation.";
+
+    // Sync initial twin attributes to candidate baseline
+    document.getElementById("cf-twin-skills").innerText = skills;
+    document.getElementById("cf-twin-exp").innerText = `${exp} Years`;
+    document.getElementById("cf-twin-qual").innerText = `${qual}%`;
+    document.getElementById("cf-twin-dec").innerText = dec;
+    document.getElementById("cf-twin-expl").innerText = "Awaiting counterfactual evaluation...";
 }
 
 async function runCounterfactualEvaluation() {
@@ -471,7 +591,7 @@ async function runCounterfactualEvaluation() {
         // Populate Baseline
         document.getElementById("cf-orig-name").innerText = data.original_profile.candidate.name;
         document.getElementById("cf-orig-skills").innerText = data.original_profile.candidate.skills;
-        document.getElementById("cf-orig-exp").innerText = `${data.original_profile.candidate.experience_years} Years`;
+        document.getElementById("cf-orig-exp").innerText = `${data.original_profile.candidate.experience_years != null ? data.original_profile.candidate.experience_years : (data.original_profile.candidate.experience || 0)} Years`;
         document.getElementById("cf-orig-qual").innerText = `${data.original_profile.qualification_score}%`;
         document.getElementById("cf-orig-dec").innerText = data.original_profile.decision;
         document.getElementById("cf-orig-expl").innerText = data.original_profile.explanation;
@@ -479,7 +599,7 @@ async function runCounterfactualEvaluation() {
         // Populate Twin
         document.getElementById("cf-twin-concept").innerText = `${data.perturbation_concept} (${data.target_value})`;
         document.getElementById("cf-twin-skills").innerText = data.counterfactual_profile.candidate.skills;
-        document.getElementById("cf-twin-exp").innerText = `${data.counterfactual_profile.candidate.experience_years} Years`;
+        document.getElementById("cf-twin-exp").innerText = `${data.counterfactual_profile.candidate.experience_years != null ? data.counterfactual_profile.candidate.experience_years : (data.counterfactual_profile.candidate.experience || 0)} Years`;
         document.getElementById("cf-twin-qual").innerText = `${data.counterfactual_profile.qualification_score}%`;
         document.getElementById("cf-twin-dec").innerText = data.counterfactual_profile.decision;
         document.getElementById("cf-twin-expl").innerText = data.counterfactual_profile.explanation;
@@ -561,21 +681,13 @@ async function runResumeScreening() {
 
     if (!text) return;
 
-    const candPayload = {
-        candidate_id: "SCR_CAND_LIVE",
-        name: "Live Screened Candidate",
-        skills: text,
-        experience_years: exp,
-        education: edu,
-        interview_score: 85.0
-    };
-
     try {
-        const res = await fetch("/api/evaluate", {
+        const res = await fetch("/api/resume-screen", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                candidate: candPayload,
+                resume_text: text,
+                job_id: state.activeJobId,
                 job: state.activeJob,
                 mode: state.evalMode
             })
@@ -586,30 +698,31 @@ async function runResumeScreening() {
         card.style.display = "block";
 
         const recBadge = document.getElementById("scr-rec-badge");
-        recBadge.innerText = data.recommendation;
-        recBadge.className = `badge ${data.recommendation === "STRONG_HIRE" || data.recommendation === "HIRE" ? "badge-success" : "badge-warning"}`;
+        const dec = data.ai_evaluation.decision;
+        recBadge.innerText = dec;
+        recBadge.className = `badge ${dec === "STRONG_HIRE" || dec === "HIRE" ? "badge-success" : "badge-warning"}`;
 
-        document.getElementById("scr-qual-score").innerText = `${data.qualification_score}%`;
-        document.getElementById("scr-req-match").innerText = `${data.skill_analysis.required_match_percentage}%`;
-        document.getElementById("scr-efs").innerText = `${data.efs.faithfulness_score}/100`;
-        document.getElementById("scr-bgi").innerText = `${data.bgi.bgi_score}/100`;
+        document.getElementById("scr-qual-score").innerText = `${data.qualification_analysis.qualification_score}%`;
+        document.getElementById("scr-req-match").innerText = `${data.qualification_analysis.skill_analysis.required_match_percentage}%`;
+        document.getElementById("scr-efs").innerText = `${data.efs_assessment.faithfulness_score}/100`;
+        document.getElementById("scr-bgi").innerText = `${data.bgi_audit.bgi_score}/100`;
 
         const matchDiv = document.getElementById("scr-matched-skills");
         matchDiv.innerHTML = "";
-        (data.skill_analysis.matched_required_skills || []).forEach(s => {
+        (data.qualification_analysis.skill_analysis.matched_required_skills || []).forEach(s => {
             matchDiv.innerHTML += `<span class="skill-tag skill-matched">✓ ${s}</span> `;
         });
 
         const missDiv = document.getElementById("scr-missing-skills");
         missDiv.innerHTML = "";
-        (data.skill_analysis.missing_required_skills || []).forEach(s => {
+        (data.qualification_analysis.skill_analysis.missing_required_skills || []).forEach(s => {
             missDiv.innerHTML += `<span class="skill-tag skill-missing">✗ ${s}</span> `;
         });
-        if ((data.skill_analysis.missing_required_skills || []).length === 0) {
-            missDiv.innerHTML = `<span class="text-muted">None</span>`;
+        if ((data.qualification_analysis.skill_analysis.missing_required_skills || []).length === 0) {
+            missDiv.innerHTML = `<span class="text-muted">None (100% Required Skills Met)</span>`;
         }
 
-        document.getElementById("scr-explanation-text").innerText = data.explanation;
+        document.getElementById("scr-explanation-text").innerText = data.ai_evaluation.explanation;
     } catch (e) {
         console.error("Resume screening error:", e);
     }
@@ -627,7 +740,7 @@ const API_SAMPLE_PAYLOADS = {
             experience_years: 5.0,
             education: "B.Tech Computer Science",
             certifications: "AWS Solutions Architect",
-            interview_score: 88.0
+            projects: "Distributed microservices backend"
         },
         job: {
             title: "Senior Python Backend Engineer",
@@ -639,23 +752,29 @@ const API_SAMPLE_PAYLOADS = {
         mode: "Demo Simulation Mode"
     }, null, 2),
 
+    "/api/evidence": JSON.stringify({
+        candidate_id: "SWE_001",
+        job_id: "JOB_SWE_01",
+        explanation: "Candidate has 6 years experience with strong Python and PostgreSQL skills, but lacks Kubernetes."
+    }, null, 2),
+
     "/api/skill-analysis": JSON.stringify({
-        candidate_skills: ["Python", "SQL", "Git", "FastAPI"],
+        candidate_skills: ["postgres", "python 3", "git", "fast api"],
         required_skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
         preferred_skills: ["FastAPI", "Docker"]
     }, null, 2),
 
     "/api/qualification-score": JSON.stringify({
         candidate: {
-            skills: "Python; SQL; REST API; Git",
+            skills: "Python; SQL; REST API; Git; PostgreSQL",
             experience_years: 4.0,
             education: "B.Tech Computer Science",
             certifications_count: 1,
-            interview_score: 85.0
+            projects: "Distributed systems and API microservices"
         },
         job: {
             minimum_experience: 3.0,
-            required_skills: ["Python", "SQL", "Git"]
+            required_skills: ["Python", "SQL", "Git", "PostgreSQL"]
         }
     }, null, 2),
 
@@ -686,8 +805,38 @@ const API_SAMPLE_PAYLOADS = {
         mode: "Demo Simulation Mode"
     }, null, 2),
 
+    "/api/decision-consistency": JSON.stringify({
+        candidate_a: { candidate_id: "A", name: "Candidate A", qualification_score: 90.0 },
+        candidate_b: { candidate_id: "B", name: "Candidate B", qualification_score: 60.0 },
+        eval_a: { decision: "HIRE", qualification_score: 90.0 },
+        eval_b: { decision: "REJECT", qualification_score: 60.0 }
+    }, null, 2),
+
+    "/api/statistics": JSON.stringify({
+        test_type: "mcnemar",
+        original_values: ["SELECT", "SELECT", "REJECT", "REJECT"],
+        modified_values: ["SELECT", "REJECT", "REJECT", "REJECT"]
+    }, null, 2),
+
+    "/api/re-evaluate": JSON.stringify({
+        candidate: {
+            candidate_id: "SWE_002",
+            name: "Marcus Vance",
+            skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
+            experience_years: 5.0
+        },
+        mitigation_instruction: "Evaluate strictly based on objective job qualifications and technical competencies."
+    }, null, 2),
+
+    "/api/resume-screen": JSON.stringify({
+        resume_text: "Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker, and Microservices. B.Tech in Computer Science.",
+        job_id: "JOB_SWE_01"
+    }, null, 2),
+
     "/api/cluster": "{}",
-    "/api/health": "{}"
+    "/api/health": "{}",
+    "/api/jobs": "{}",
+    "/api/datasets": "{}"
 };
 
 function initAPIConsole() {
@@ -711,7 +860,7 @@ async function executeAPIConsoleRequest() {
 
     try {
         let options = { headers: { "Content-Type": "application/json" } };
-        if (endpoint === "/api/health") {
+        if (endpoint === "/api/health" || endpoint === "/api/jobs" || endpoint === "/api/datasets") {
             options.method = "GET";
         } else {
             options.method = "POST";
