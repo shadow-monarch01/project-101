@@ -1,7 +1,7 @@
 """
 AI Hiring Intelligence System - FastAPI REST API Gateway
 Exposes qualification-based candidate assessment, skill gap analysis, Evidence Traceability,
-Explanation Faithfulness Scoring (EFS), Behavioral Gap Index (BGI),
+Explanation Faithfulness Scoring (EFS), Evidence-Based Candidate Background Investigation (BI),
 qualification counterfactual testing, decision consistency, mitigation feedback loops, and semantic clustering.
 """
 
@@ -41,10 +41,9 @@ from modules.evidence import (
     extract_claims_from_explanation,
     evaluate_evidence_traceability
 )
-from modules.bgi import (
-    compute_bgi,
-    check_decision_consistency,
-    BGI_DISCLAIMER
+from modules.background_investigation import (
+    run_background_investigation,
+    BI_DISCLAIMER
 )
 from modules.faithfulness import (
     evaluate_faithfulness_instance,
@@ -53,7 +52,8 @@ from modules.faithfulness import (
 from modules.decision_consistency import (
     check_monotonicity,
     check_pairwise_consistency,
-    evaluate_pool_consistency
+    evaluate_pool_consistency,
+    check_decision_consistency
 )
 from modules.variations import (
     make_qualification_variation,
@@ -79,7 +79,7 @@ from modules.statistics import (
 
 app = FastAPI(
     title="AI Hiring Intelligence System for Qualification-Based Candidate Assessment and Decision Auditing",
-    description="REST API for qualification-based hiring assessment, Evidence Traceability, EFS faithfulness scoring, BGI behavioral gap auditing, and decision consistency.",
+    description="REST API for qualification-based hiring assessment, Evidence Traceability, EFS faithfulness scoring, Evidence-Based Candidate Background Investigation (BI), and decision consistency.",
     version="2.1.0"
 )
 
@@ -161,15 +161,11 @@ class QualScoreRequest(BaseModel):
     job: Optional[Dict[str, Any]] = None
     weights: Optional[Dict[str, float]] = None
 
-class BGIRequest(BaseModel):
-    qualification_score: float
-    expected_decision: str
-    ai_decision: str
-    ai_score: Optional[float] = None
-    efs_score: Optional[float] = 90.0
-    required_skill_match: Optional[float] = 100.0
-    experience_match: Optional[float] = 100.0
-    weights: Optional[Dict[str, float]] = None
+class BackgroundInvestigationRequest(BaseModel):
+    candidate: Dict[str, Any]
+    job: Optional[Dict[str, Any]] = None
+    explanation: Optional[str] = None
+    evidence_traceability: Optional[Dict[str, Any]] = None
 
 class EFSRequest(BaseModel):
     explanation: str
@@ -247,7 +243,7 @@ def api_health():
         "version": "2.1.0",
         "active_dataset": ACTIVE_DATASET,
         "ollama": check_ollama_connectivity(),
-        "disclaimer": BGI_DISCLAIMER
+        "disclaimer": BI_DISCLAIMER
     }
 
 @app.get("/api/jobs")
@@ -334,6 +330,7 @@ def api_get_candidates(
     processed = []
     for cand in records:
         q_res = compute_overall_qualification_score(cand, job)
+        bi_res = run_background_investigation(cand, job)
         cand_copy = dict(cand)
         cand_copy["qualification_score"] = q_res["qualification_score"]
         cand_copy["score"] = q_res["qualification_score"]
@@ -348,6 +345,9 @@ def api_get_candidates(
         cand_copy["component_breakdown"] = q_res["component_breakdown"]
         cand_copy["skill_analysis"] = q_res["skill_analysis"]
         cand_copy["experience_analysis"] = q_res["experience_analysis"]
+        cand_copy["background_investigation"] = bi_res
+        cand_copy["background_status"] = bi_res["overall_status"]
+        cand_copy["evidence_coverage"] = bi_res["evidence_coverage_percentage"]
         processed.append(cand_copy)
 
     total = len(processed)
@@ -427,7 +427,7 @@ def api_evaluate_evidence(req: EvidenceRequest):
 def api_evaluate(req: EvaluateRequest):
     """
     Complete Candidate AI Evaluation:
-    Generates AI Recommendation, Explanation, Qual Score, Evidence Traceability, EFS, and BGI.
+    Generates AI Recommendation, Explanation, Qual Score, Evidence Traceability, EFS, and Background Investigation.
     """
     job = req.job or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
     
@@ -467,15 +467,12 @@ def api_evaluate(req: EvaluateRequest):
         job_requirements=job
     )
 
-    # 5. Bias/Behavioral Gap Index (BGI)
-    bgi_res = compute_bgi(
-        qualification_score=qual_score,
-        expected_decision=exp_decision,
-        ai_decision=decision,
-        ai_score=ai_score,
-        efs_score=efs_res["faithfulness_score"],
-        required_skill_match=skill_analysis["required_match_percentage"],
-        experience_match=exp_analysis["experience_match_percentage"]
+    # 5. Evidence-Based Candidate Background Investigation (BI)
+    bi_res = run_background_investigation(
+        candidate=req.candidate,
+        job=job,
+        evidence_traceability=evidence_res,
+        explanation=explanation
     )
 
     return {
@@ -494,25 +491,22 @@ def api_evaluate(req: EvaluateRequest):
         "skill_gaps": ai_eval.get("skill_gaps", skill_analysis["missing_required_skills"]),
         "evidence": evidence_res,
         "efs": efs_res,
-        "bgi": bgi_res,
+        "background_investigation": bi_res,
         "skill_analysis": skill_analysis,
         "experience_analysis": exp_analysis,
         "component_breakdown": qual_res["component_breakdown"],
         "mitigation_applied": bool(req.mitigation)
     }
 
-@app.post("/api/bgi")
-def api_calculate_bgi(req: BGIRequest):
-    """Calculates the Behavioral Gap Index (BGI) with component breakdown."""
-    return compute_bgi(
-        qualification_score=req.qualification_score,
-        expected_decision=req.expected_decision,
-        ai_decision=req.ai_decision,
-        ai_score=req.ai_score,
-        efs_score=req.efs_score or 90.0,
-        required_skill_match=req.required_skill_match or 100.0,
-        experience_match=req.experience_match or 100.0,
-        weights=req.weights
+@app.post("/api/background-investigation")
+def api_calculate_background_investigation(req: BackgroundInvestigationRequest):
+    """Calculates Evidence-Based Candidate Background Investigation across credentials and profile facts."""
+    job = req.job or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
+    return run_background_investigation(
+        candidate=req.candidate,
+        job=job,
+        evidence_traceability=req.evidence_traceability,
+        explanation=req.explanation
     )
 
 @app.post("/api/efs")
@@ -560,7 +554,8 @@ def api_counterfactual(req: CounterfactualRequest):
         modified_decision=twin_eval["decision"]
     )
 
-    # 5. EFS and BGI for Twin
+    # 5. EFS and Background Investigation for Twin
+    twin_evidence = evaluate_evidence_traceability(twin_eval["explanation"], twin, job)
     twin_efs = evaluate_faithfulness_instance(
         explanation=twin_eval["explanation"],
         qualification_score=twin_qual["qualification_score"],
@@ -569,11 +564,11 @@ def api_counterfactual(req: CounterfactualRequest):
         candidate_data=twin,
         job_requirements=job
     )
-    twin_bgi = compute_bgi(
-        qualification_score=twin_qual["qualification_score"],
-        expected_decision=twin_qual["expected_decision"],
-        ai_decision=twin_eval["decision"],
-        efs_score=twin_efs["faithfulness_score"]
+    twin_bi = run_background_investigation(
+        candidate=twin,
+        job=job,
+        evidence_traceability=twin_evidence,
+        explanation=twin_eval["explanation"]
     )
 
     return {
@@ -589,7 +584,7 @@ def api_counterfactual(req: CounterfactualRequest):
             "decision": twin_eval["decision"],
             "explanation": twin_eval["explanation"],
             "efs": twin_efs,
-            "bgi": twin_bgi
+            "background_investigation": twin_bi
         },
         "perturbation_concept": req.concept,
         "target_value": req.target_value,
@@ -671,6 +666,8 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
             explanation = ai_res.get("explanation", "")
             ai_score = ai_res.get("score") if ai_res.get("score") is not None else qual_score
 
+            evidence_res = evaluate_evidence_traceability(explanation, cand_dict, job)
+
             efs_res = evaluate_faithfulness_instance(
                 explanation=explanation,
                 qualification_score=qual_score,
@@ -681,14 +678,11 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
                 job_requirements=job
             )
 
-            bgi_res = compute_bgi(
-                qualification_score=qual_score,
-                expected_decision=exp_dec,
-                ai_decision=decision,
-                ai_score=ai_score,
-                efs_score=efs_res["faithfulness_score"],
-                required_skill_match=qual_res["skill_analysis"]["required_match_percentage"],
-                experience_match=qual_res["experience_analysis"]["experience_match_percentage"]
+            bi_res = run_background_investigation(
+                candidate=cand_dict,
+                job=job,
+                evidence_traceability=evidence_res,
+                explanation=explanation
             )
 
             cand_result = dict(cand_dict)
@@ -712,10 +706,10 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
                 "ai_score": ai_score,
                 "efs_score": efs_res["faithfulness_score"],
                 "efs_breakdown": efs_res["breakdown"],
-                "bgi_score": bgi_res["bgi_score"],
-                "bgi_components": bgi_res["components"],
-                "flagged": bgi_res["flagged_for_audit"],
-                "bgi_tier": bgi_res["classification"],
+                "background_investigation": bi_res,
+                "background_status": bi_res["overall_status"],
+                "evidence_coverage": bi_res["evidence_coverage_percentage"],
+                "flagged": bool(bi_res["overall_status"] in ["INCONSISTENCY_DETECTED", "INSUFFICIENT_EVIDENCE"]),
                 "explanation": explanation,
                 "matched_skills": qual_res["skill_analysis"]["matched_required_skills"],
                 "missing_skills": qual_res["skill_analysis"]["missing_required_skills"],
@@ -736,7 +730,8 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
                 "qualification_score": 0.0,
                 "score": 0.0,
                 "required_match_percentage": 0.0,
-                "bgi_score": 0.0,
+                "background_status": "INSUFFICIENT_EVIDENCE",
+                "evidence_coverage": 0.0,
                 "efs_score": 0.0,
                 "flagged": True
             })
@@ -749,14 +744,22 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
         avg_qual = round(sum(r["qualification_score"] for r in results) / evaluated_count, 1)
         avg_skill = round(sum(r["required_match_percentage"] for r in results) / evaluated_count, 1)
         avg_efs = round(sum(r["efs_score"] for r in results) / evaluated_count, 1)
-        avg_bgi = round(sum(r["bgi_score"] for r in results) / evaluated_count, 1)
+        avg_coverage = round(sum(r.get("evidence_coverage", 0.0) for r in results) / evaluated_count, 1)
+        bi_verified_count = sum(1 for r in results if r.get("background_status") == "VERIFIED_FROM_PROVIDED_EVIDENCE")
+        bi_partially_verified_count = sum(1 for r in results if r.get("background_status") == "PARTIALLY_VERIFIED_FROM_PROVIDED_EVIDENCE")
+        bi_insufficient_count = sum(1 for r in results if r.get("background_status") == "INSUFFICIENT_EVIDENCE") + failed_count
+        bi_inconsistent_count = sum(1 for r in results if r.get("background_status") == "INCONSISTENCY_DETECTED")
         flagged_count = sum(1 for r in results if r.get("flagged", False)) + failed_count
         pool_consistency = evaluate_pool_consistency(results)
     else:
         avg_qual = 0.0
         avg_skill = 0.0
         avg_efs = 0.0
-        avg_bgi = 0.0
+        avg_coverage = 0.0
+        bi_verified_count = 0
+        bi_partially_verified_count = 0
+        bi_insufficient_count = failed_count
+        bi_inconsistent_count = 0
         flagged_count = failed_count
         pool_consistency = {"status": "NO_VALID_CANDIDATES", "inconsistent_pairs": 0, "total_pairs_checked": 0}
 
@@ -773,7 +776,14 @@ def api_batch_evaluate(req: Optional[BatchEvaluateRequest] = None):
         "average_qualification_score": avg_qual,
         "average_skill_match_percentage": avg_skill,
         "average_efs": avg_efs,
-        "average_bgi": avg_bgi,
+        "average_evidence_coverage": avg_coverage,
+        "background_investigation_summary": {
+            "verified_count": bi_verified_count,
+            "partially_verified_count": bi_partially_verified_count,
+            "insufficient_evidence_count": bi_insufficient_count,
+            "inconsistency_detected_count": bi_inconsistent_count,
+            "average_coverage_percentage": avg_coverage
+        },
         "pool_consistency": pool_consistency,
         "candidates": all_output_candidates,
         "errors": failed_candidates
@@ -801,30 +811,34 @@ def api_run_mitigation(req: MitigationRequest):
 
         # Before (No Mitigation)
         b_ai = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name, mitigation=False)
+        b_ev = evaluate_evidence_traceability(b_ai["explanation"], cand, job)
         b_efs = evaluate_faithfulness_instance(b_ai["explanation"], q_score, b_ai["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
-        b_bgi = compute_bgi(q_score, qual_res["expected_decision"], b_ai["decision"], efs_score=b_efs["faithfulness_score"])
+        b_bi = run_background_investigation(candidate=cand, job=job, evidence_traceability=b_ev, explanation=b_ai["explanation"])
         
         before_evals.append({
             "candidate_id": cand.get("candidate_id"),
             "name": cand.get("name"),
             "qualification_score": q_score,
             "decision": b_ai["decision"],
-            "bgi_score": b_bgi["bgi_score"],
+            "background_status": b_bi["overall_status"],
+            "evidence_coverage": b_bi["evidence_coverage_percentage"],
             "efs_score": b_efs["faithfulness_score"],
             "explanation": b_ai["explanation"]
         })
 
         # After (With In-Context Mitigation)
         a_ai = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name, mitigation=True, mitigation_instruction=mitigation_instruction())
+        a_ev = evaluate_evidence_traceability(a_ai["explanation"], cand, job)
         a_efs = evaluate_faithfulness_instance(a_ai["explanation"], q_score, a_ai["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
-        a_bgi = compute_bgi(q_score, qual_res["expected_decision"], a_ai["decision"], efs_score=a_efs["faithfulness_score"])
+        a_bi = run_background_investigation(candidate=cand, job=job, evidence_traceability=a_ev, explanation=a_ai["explanation"])
 
         after_evals.append({
             "candidate_id": cand.get("candidate_id"),
             "name": cand.get("name"),
             "qualification_score": q_score,
             "decision": a_ai["decision"],
-            "bgi_score": a_bgi["bgi_score"],
+            "background_status": a_bi["overall_status"],
+            "evidence_coverage": a_bi["evidence_coverage_percentage"],
             "efs_score": a_efs["faithfulness_score"],
             "explanation": a_ai["explanation"]
         })
@@ -854,6 +868,8 @@ def api_re_evaluate(req: ReEvaluateRequest):
         mitigation_instruction=instr
     )
 
+    evidence_res = evaluate_evidence_traceability(ai_res["explanation"], req.candidate, job)
+
     efs_res = evaluate_faithfulness_instance(
         ai_res["explanation"],
         qual_res["qualification_score"],
@@ -863,11 +879,11 @@ def api_re_evaluate(req: ReEvaluateRequest):
         job_requirements=job
     )
 
-    bgi_res = compute_bgi(
-        qual_res["qualification_score"],
-        qual_res["expected_decision"],
-        ai_res["decision"],
-        efs_score=efs_res["faithfulness_score"]
+    bi_res = run_background_investigation(
+        candidate=req.candidate,
+        job=job,
+        evidence_traceability=evidence_res,
+        explanation=ai_res["explanation"]
     )
 
     return {
@@ -875,7 +891,7 @@ def api_re_evaluate(req: ReEvaluateRequest):
         "qualification_analysis": qual_res,
         "re_evaluation": ai_res,
         "efs": efs_res,
-        "bgi": bgi_res,
+        "background_investigation": bi_res,
         "mitigation_instruction_used": instr
     }
 
@@ -883,7 +899,7 @@ def api_re_evaluate(req: ReEvaluateRequest):
 def api_resume_screen(req: ResumeScreenRequest):
     """
     End-to-end Resume Screening:
-    Parses resume text or candidate profile, matches skills, calculates $Score_{qual}$, EFS, and BGI.
+    Parses resume text or candidate profile, matches skills, calculates $Score_{qual}$, EFS, and Background Investigation.
     """
     job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
     cand = dict(req.candidate_data or {})
@@ -909,6 +925,7 @@ def api_resume_screen(req: ResumeScreenRequest):
 
     qual_res = compute_overall_qualification_score(cand, job)
     ai_eval = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name)
+    evidence_res = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
 
     efs_res = evaluate_faithfulness_instance(
         ai_eval["explanation"],
@@ -919,14 +936,12 @@ def api_resume_screen(req: ResumeScreenRequest):
         job_requirements=job
     )
 
-    bgi_res = compute_bgi(
-        qual_res["qualification_score"],
-        qual_res["expected_decision"],
-        ai_eval["decision"],
-        efs_score=efs_res["faithfulness_score"]
+    bi_res = run_background_investigation(
+        candidate=cand,
+        job=job,
+        evidence_traceability=evidence_res,
+        explanation=ai_eval["explanation"]
     )
-
-    evidence_res = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
 
     return {
         "candidate": cand,
@@ -935,7 +950,7 @@ def api_resume_screen(req: ResumeScreenRequest):
         "ai_evaluation": ai_eval,
         "evidence": evidence_res,
         "efs_assessment": efs_res,
-        "bgi_audit": bgi_res
+        "background_investigation": bi_res
     }
 
 @app.get("/api/report/{candidate_id}")
@@ -963,9 +978,9 @@ def api_candidate_report(candidate_id: str, job_id: Optional[str] = "JOB_SWE_01"
 
     qual_res = compute_overall_qualification_score(cand, job)
     ai_eval = evaluate_candidate(cand, job)
-    efs = evaluate_faithfulness_instance(ai_eval["explanation"], qual_res["qualification_score"], ai_eval["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
-    bgi = compute_bgi(qual_res["qualification_score"], qual_res["expected_decision"], ai_eval["decision"], efs_score=efs["faithfulness_score"])
     ev = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
+    efs = evaluate_faithfulness_instance(ai_eval["explanation"], qual_res["qualification_score"], ai_eval["decision"], qual_res["skill_analysis"], candidate_data=cand, job_requirements=job)
+    bi = run_background_investigation(candidate=cand, job=job, evidence_traceability=ev, explanation=ai_eval["explanation"])
 
     return {
         "candidate": cand,
@@ -974,7 +989,7 @@ def api_candidate_report(candidate_id: str, job_id: Optional[str] = "JOB_SWE_01"
         "ai_evaluation": ai_eval,
         "evidence": ev,
         "efs_assessment": efs,
-        "bgi_audit": bgi
+        "background_investigation": bi
     }
 
 @app.post("/api/export-report")
@@ -983,6 +998,7 @@ def api_export_report(req: ExportReportRequest):
     report = api_candidate_report(req.candidate_id, req.job_id)
     if req.format.lower() == "csv":
         # Flatten dictionary to tabular CSV
+        bi_data = report.get("background_investigation", {})
         flat_dict = {
             "candidate_id": req.candidate_id,
             "name": report["candidate"].get("name"),
@@ -992,9 +1008,10 @@ def api_export_report(req: ExportReportRequest):
             "ai_decision": report["ai_evaluation"]["decision"],
             "efs_score": report["efs_assessment"]["faithfulness_score"],
             "efs_tier": report["efs_assessment"]["classification"],
-            "bgi_score": report["bgi_audit"]["bgi_score"],
-            "bgi_tier": report["bgi_audit"]["classification"],
-            "flagged_for_audit": report["bgi_audit"]["flagged_for_audit"],
+            "background_status": bi_data.get("overall_status", "UNKNOWN"),
+            "evidence_coverage": bi_data.get("evidence_coverage_percentage", 0.0),
+            "inconsistencies_count": len(bi_data.get("inconsistencies", [])),
+            "flagged_for_audit": bi_data.get("overall_status") in ["INCONSISTENCY_DETECTED", "INSUFFICIENT_EVIDENCE"],
             "explanation": report["ai_evaluation"]["explanation"]
         }
         df_exp = pd.DataFrame([flat_dict])

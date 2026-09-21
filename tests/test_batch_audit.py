@@ -42,7 +42,7 @@ def test_batch_audit_single_candidate():
     assert len(data["candidates"]) == 1
     assert data["candidates"][0]["candidate_id"] == "TEST_CAND_01"
     assert "efs_score" in data["candidates"][0]
-    assert "bgi_score" in data["candidates"][0]
+    assert "background_status" in data["candidates"][0]
 
 def test_batch_audit_multiple_candidates_processes_all():
     candidates = [
@@ -71,7 +71,7 @@ def test_batch_audit_default_pool_processes_full_dataset():
     assert data["failed_candidates"] == 0
     assert data["average_qualification_score"] > 0.0
     assert data["average_efs"] > 0.0
-    assert data["average_bgi"] >= 0.0
+    assert "background_investigation_summary" in data
 
 def test_batch_audit_malformed_candidate_does_not_crash_pool():
     mixed_candidates = [
@@ -117,7 +117,7 @@ def test_batch_audit_missing_optional_fields():
     cand_out = data["candidates"][0]
     assert cand_out["qualification_score"] >= 0.0
     assert "efs_score" in cand_out
-    assert "bgi_score" in cand_out
+    assert "background_status" in cand_out
 
 def test_batch_audit_invalid_numeric_fields():
     candidate_bad_numeric = [

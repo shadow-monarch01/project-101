@@ -20,8 +20,14 @@ from modules.evidence import (
     evaluate_evidence_traceability
 )
 from modules.faithfulness import evaluate_faithfulness_instance
-from modules.bgi import compute_bgi, check_decision_consistency
-from modules.decision_consistency import check_pairwise_consistency
+from modules.background_investigation import (
+    run_background_investigation,
+    check_information_consistency,
+    investigate_education,
+    investigate_experience,
+    BI_DISCLAIMER
+)
+from modules.decision_consistency import check_pairwise_consistency, check_decision_consistency
 
 client = TestClient(app)
 
@@ -174,73 +180,60 @@ def test_qualification_technical_interview_remains_separate():
     assert res["component_breakdown"]["projects_score"] != 88.0
 
 # ============================================================================
-# 4. BGI Refactor Tests (Items 14 - 19)
+# 4. Background Investigation (BI) Tests (Items 14 - 19)
 # ============================================================================
 
-def test_bgi_zero_gap_case():
-    res = compute_bgi(
-        qualification_score=85.0,
-        expected_decision="STRONG_HIRE",
-        ai_decision="STRONG_HIRE",
-        ai_score=85.0,
-        efs_score=100.0
-    )
-    assert res["bgi_score"] == 0.0
-    assert res["classification"] == "Very Low Gap"
-    assert res["is_audit_indicator"] is True
+def test_bi_verified_credentials():
+    cand = {
+        "skills": ["Python", "SQL", "Git", "REST API", "PostgreSQL"],
+        "experience_years": 5.0,
+        "education": "B.Tech Computer Science",
+        "certifications": "AWS Solutions Architect",
+        "projects": "Distributed microservices backend"
+    }
+    res = run_background_investigation(cand, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
+    assert res["overall_status"] == "VERIFIED_FROM_PROVIDED_EVIDENCE"
+    assert res["evidence_coverage_percentage"] >= 80.0
+    assert res["is_consistent"] is True
 
-def test_bgi_qualification_gap_case():
-    res = compute_bgi(
-        qualification_score=90.0,
-        expected_decision="HIRE",
-        ai_decision="HIRE",
-        ai_score=50.0,  # AI score diverged from qualification
-        efs_score=95.0
-    )
-    assert res["components"]["qualification_gap"] == 40.0
-    assert res["bgi_score"] > 15.0
+def test_bi_missing_evidence():
+    cand = {"candidate_id": "MIN_01"}
+    res = run_background_investigation(cand)
+    assert res["overall_status"] in ["INSUFFICIENT_EVIDENCE", "PARTIALLY_VERIFIED_FROM_PROVIDED_EVIDENCE"]
+    assert len(res["missing_evidence"]) >= 1
 
-def test_bgi_decision_gap_case():
-    res = compute_bgi(
-        qualification_score=90.0,
-        expected_decision="STRONG_HIRE",
-        ai_decision="REJECT",  # Massive rank distance
-        ai_score=40.0,
-        efs_score=90.0
-    )
-    assert res["components"]["decision_gap"] == 100.0
-    assert res["bgi_score"] >= 50.0
-    assert res["flagged_for_audit"] is True
+def test_bi_inconsistency_detection_duration_mismatch():
+    cand = {
+        "experience_years": 8.0,
+        "employment_history": [
+            {"role": "Dev", "company": "Co A", "duration_years": 1.0}
+        ]
+    }
+    res = run_background_investigation(cand)
+    assert res["overall_status"] == "INCONSISTENCY_DETECTED"
+    assert res["is_consistent"] is False
+    assert len(res["inconsistencies"]) >= 1
 
-def test_bgi_explanation_gap_case():
-    res = compute_bgi(
-        qualification_score=80.0,
-        expected_decision="HIRE",
-        ai_decision="HIRE",
-        ai_score=80.0,
-        efs_score=30.0  # Low EFS -> High explanation gap
-    )
-    assert res["components"]["explanation_gap"] == 70.0
-    assert res["bgi_score"] >= 14.0
+def test_bi_skill_corroboration():
+    cand = {
+        "skills": ["Python", "PostgreSQL", "Docker"],
+        "projects": "Created Dockerized Python API backed by PostgreSQL"
+    }
+    res = run_background_investigation(cand)
+    assert res["investigations"]["skills"]["status"] == "SUPPORTED"
+    assert len(res["investigations"]["skills"]["corroborated_skills"]) >= 2
 
-def test_bgi_configurable_weights():
-    custom_w = {"qualification_gap": 0.80, "decision_gap": 0.10, "explanation_gap": 0.10}
-    res = compute_bgi(
-        qualification_score=90.0,
-        expected_decision="HIRE",
-        ai_decision="HIRE",
-        ai_score=50.0,
-        weights=custom_w
-    )
-    assert res["weights"]["qualification_gap"] == 0.80
-    assert res["weights"]["decision_gap"] == 0.10
+def test_bi_coverage_score_bounds():
+    for exp in [0.0, 3.0, 10.0]:
+        cand = {"experience_years": exp, "skills": ["Python"], "education": "B.Tech"}
+        res = run_background_investigation(cand)
+        assert 0.0 <= res["evidence_coverage_percentage"] <= 100.0
 
-def test_bgi_score_remains_in_0_to_100():
-    for q in [0.0, 50.0, 100.0]:
-        for s in [0.0, 50.0, 100.0]:
-            for efs in [0.0, 50.0, 100.0]:
-                res = compute_bgi(q, "REJECT", "STRONG_HIRE", s, efs)
-                assert 0.0 <= res["bgi_score"] <= 100.0
+def test_bi_disclaimer_present():
+    cand = {"skills": ["Python"], "experience_years": 2.0}
+    res = run_background_investigation(cand)
+    assert res["disclaimer"] == BI_DISCLAIMER
+    assert "internal evidence grounding" in res["disclaimer"].lower() or "candidate" in res["disclaimer"].lower()
 
 # ============================================================================
 # 5. Skill Normalization Tests (Items 20 - 24)
@@ -321,7 +314,7 @@ def test_api_backward_compatibility_evaluate():
     assert "recommendation" in data
     assert "decision" in data
     assert "efs" in data
-    assert "bgi" in data
+    assert "background_investigation" in data
     assert "evidence" in data
     assert "component_breakdown" in data
 

@@ -56,7 +56,7 @@ def test_api_evaluate():
     data = res.json()
     assert "recommendation" in data
     assert "efs" in data
-    assert "bgi" in data
+    assert "background_investigation" in data
 
 def test_api_counterfactual():
     payload = {

@@ -12,7 +12,7 @@ from modules.qualifications import (
     compute_overall_qualification_score,
     match_skills
 )
-from modules.bgi import compute_bgi
+from modules.background_investigation import run_background_investigation
 from modules.faithfulness import evaluate_faithfulness_instance
 from modules.variations import make_qualification_variation
 from modules.llm_client import evaluate_candidate, check_ollama_connectivity
@@ -63,13 +63,14 @@ def run_cli_demo():
     print(f"    Recommendation: {ai_eval['decision']}")
     print(f"    Explanation: {ai_eval['explanation']}")
 
-    # 5. EFS & BGI
+    # 5. EFS & Background Investigation
     efs = evaluate_faithfulness_instance(ai_eval['explanation'], qual_res['qualification_score'], ai_eval['decision'], qual_res['skill_analysis'])
-    bgi = compute_bgi(qual_res['qualification_score'], qual_res['expected_decision'], ai_eval['decision'], efs_score=efs['faithfulness_score'])
+    bi = run_background_investigation(cand, job)
     print(f"\n[5] Auditing Metrics:")
     print(f"    Explanation Faithfulness Score (EFS): {efs['faithfulness_score']} / 100 ({efs['classification']})")
-    print(f"    Bias/Behavioral Gap Index (BGI)      : {bgi['bgi_score']} / 100 ({bgi['classification']})")
-    print(f"    Flagged For Inconsistency           : {bgi['flagged_for_audit']}")
+    print(f"    Background Investigation Status     : {bi['overall_status']}")
+    print(f"    Evidence Coverage Percentage        : {bi['evidence_coverage_percentage']}%")
+    print(f"    Internal Consistency Verified       : {bi['is_consistent']}")
 
     # 6. Qualification Counterfactual
     twin = make_qualification_variation(cand, "skills", "Remove Core Skill")

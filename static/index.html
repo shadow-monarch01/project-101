@@ -16,7 +16,7 @@
             <div class="brand-logo">⚖️</div>
             <div>
                 <h1 class="brand-title">AI Hiring Intelligence System</h1>
-                <p class="brand-subtitle">Qualification-Based Candidate Assessment, Evidence Traceability, Explanation Faithfulness (EFS) & Behavioral Gap Auditing (BGI)</p>
+                <p class="brand-subtitle">Qualification-Based Candidate Assessment, Evidence Traceability, Explanation Faithfulness (EFS) & Candidate Background Investigation (BI)</p>
             </div>
         </div>
 
@@ -137,11 +137,11 @@
                 </div>
 
                 <div class="card kpi-card">
-                    <span class="kpi-icon">⚖️</span>
+                    <span class="kpi-icon">🔍</span>
                     <div class="kpi-data">
-                        <span class="kpi-title">Behavioral Gap Index (BGI)</span>
-                        <h3 id="kpi-avg-bgi" class="kpi-value highlight-amber">14.8 / 100</h3>
-                        <span class="kpi-sub">Qualification Gap Audit Signal</span>
+                        <span class="kpi-title">Background Investigation (BI)</span>
+                        <h3 id="kpi-avg-bi" class="kpi-value highlight-amber">Verified</h3>
+                        <span class="kpi-sub">Evidence Coverage & Status</span>
                     </div>
                 </div>
 
@@ -171,7 +171,7 @@
                     <span class="flow-arrow">➔</span>
                     <div class="pipeline-step"><span class="step-num">5</span> Evidence Traceability & EFS</div>
                     <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">6</span> BGI Gap Audit</div>
+                    <div class="pipeline-step"><span class="step-num">6</span> Candidate Background Investigation</div>
                     <span class="flow-arrow">➔</span>
                     <div class="pipeline-step"><span class="step-num">7</span> Mitigation & Re-Evaluation</div>
                 </div>
@@ -183,9 +183,9 @@
                         <p class="formula-desc">Objective baseline derived strictly from job-related merit dimensions.</p>
                     </div>
                     <div class="formula-card">
-                        <h4>Behavioral Gap Index (BGI) Formulation</h4>
-                        <p class="formula-math">BGI = 0.50(Qual\_Gap) + 0.30(Dec\_Gap) + 0.20(Expl\_Gap)</p>
-                        <p class="formula-desc">Transparent audit metric evaluating qualification-decision divergence. <em>Audit indicator only, not proof of intentional bias.</em></p>
+                        <h4>Candidate Background Investigation (BI)</h4>
+                        <p class="formula-math">Coverage = 0.25(Edu) + 0.25(Exp) + 0.25(Skills) + 0.10(Certs) + 0.10(Projects) + 0.05(History)</p>
+                        <p class="formula-desc">Evidence-based validation verifying candidate credentials and detecting internal discrepancies. <em>Grounding check on supplied candidate facts.</em></p>
                     </div>
                     <div class="formula-card">
                         <h4>Explanation Faithfulness Score (EFS)</h4>
@@ -271,7 +271,7 @@
                         </div>
                     </div>
 
-                    <!-- Granular EFS & BGI Breakdown Cards -->
+                    <!-- Granular EFS & Background Investigation Breakdown Cards -->
                     <div class="audit-breakdown-grid mt-3">
                         <div class="card breakdown-subcard">
                             <h4 class="subcard-title">📜 Explanation Faithfulness (EFS) Breakdown</h4>
@@ -284,14 +284,14 @@
                         </div>
 
                         <div class="card breakdown-subcard">
-                            <h4 class="subcard-title">⚖️ Behavioral Gap Index (BGI) Breakdown</h4>
+                            <h4 class="subcard-title">🔍 Candidate Background Investigation (BI)</h4>
                             <div class="meter-group">
-                                <div class="meter-row"><span>Qualification Gap ($|Score_{qual} - AI_{score}|$):</span> <strong id="sel-bgi-qual" class="highlight-cyan">5.0</strong></div>
-                                <div class="meter-row"><span>Decision Rank Gap:</span> <strong id="sel-bgi-dec" class="highlight-green">0.0</strong></div>
-                                <div class="meter-row"><span>Explanation Gap ($100 - EFS$):</span> <strong id="sel-bgi-expl" class="highlight-purple">7.6</strong></div>
-                                <div class="meter-row"><span>Audit Weights:</span> <span class="text-muted">50% Qual / 30% Dec / 20% Expl</span></div>
+                                <div class="meter-row"><span>Investigation Status:</span> <strong id="sel-bi-status" class="highlight-green">VERIFIED</strong></div>
+                                <div class="meter-row"><span>Evidence Coverage:</span> <strong id="sel-bi-coverage" class="highlight-cyan">95.0%</strong></div>
+                                <div class="meter-row"><span>Internal Consistency:</span> <strong id="sel-bi-consistency" class="highlight-green">Verified</strong></div>
+                                <div class="meter-row"><span>Credentials Checked:</span> <span class="text-muted">Edu / Exp / Skills / Certs / Proj / History</span></div>
                             </div>
-                            <small class="bgi-disclaimer-text">⚠️ <em>Audit indicator of qualification-decision alignment; does not prove intentional bias.</em></small>
+                            <small class="bgi-disclaimer-text">🛡️ <em>Evidence-based investigation grounded strictly in candidate-provided profile facts.</em></small>
                         </div>
                     </div>
 
@@ -334,7 +334,7 @@
                                 <th>Expected Tier</th>
                                 <th>AI Recommendation</th>
                                 <th>EFS Score</th>
-                                <th>BGI Gap</th>
+                                <th>Background Status</th>
                                 <th>Cluster</th>
                             </tr>
                         </thead>
@@ -427,9 +427,9 @@
                             <span class="diag-sub">High Faithfulness</span>
                         </div>
                         <div class="diag-metric-box">
-                            <span class="diag-lbl">Behavioral Gap Index (BGI)</span>
-                            <span id="cf-diag-bgi" class="diag-val highlight-green">12.0 / 100</span>
-                            <span class="diag-sub">Very Low Gap (Consistent)</span>
+                            <span class="diag-lbl">Background Investigation (BI)</span>
+                            <span id="cf-diag-bi" class="diag-val highlight-green">VERIFIED</span>
+                            <span class="diag-sub">Credentials Supported</span>
                         </div>
                         <div class="diag-metric-box">
                             <span class="diag-lbl">Monotonicity Consistency</span>
@@ -447,7 +447,7 @@
                 <div class="card-header flex-between">
                     <div>
                         <h2 class="card-title">Prompt-Level Mitigation Feedback Loop</h2>
-                        <p class="card-subtitle">Injects explicit qualification-prioritization directives into AI evaluator prompts to eliminate behavioral gaps and restore explanation faithfulness.</p>
+                        <p class="card-subtitle">Injects explicit qualification-prioritization directives into AI evaluator prompts to eliminate decision inconsistencies and restore explanation faithfulness.</p>
                     </div>
                     <button id="btn-execute-mitigation" class="btn btn-primary">⚡ Execute Mitigation & Re-evaluation</button>
                 </div>
@@ -456,8 +456,8 @@
                     <div class="mit-card mit-before">
                         <span class="mit-title">Before Mitigation</span>
                         <div class="mit-val-row">
-                            <span>Mean BGI Gap:</span>
-                            <strong id="mit-bgi-before" class="highlight-amber">24.5 / 100</strong>
+                            <span>Mean Coverage:</span>
+                            <strong id="mit-cov-before" class="highlight-amber">85.0%</strong>
                         </div>
                         <div class="mit-val-row">
                             <span>Mean Faithfulness (EFS):</span>
@@ -477,16 +477,16 @@
                     <div class="mit-card mit-after">
                         <span class="mit-title">After Mitigation</span>
                         <div class="mit-val-row">
-                            <span>Mean BGI Gap:</span>
-                            <strong id="mit-bgi-after" class="highlight-green">4.2 / 100</strong>
+                            <span>Mean Coverage:</span>
+                            <strong id="mit-cov-after" class="highlight-green">98.5%</strong>
                         </div>
                         <div class="mit-val-row">
                             <span>Mean Faithfulness (EFS):</span>
                             <strong id="mit-efs-after" class="highlight-purple">98.5 / 100</strong>
                         </div>
                         <div class="mit-val-row">
-                            <span>BGI Gap Reduction:</span>
-                            <strong id="mit-reduction-pct" class="highlight-green">82.8% Improvement</strong>
+                            <span>Consistency Improvement:</span>
+                            <strong id="mit-reduction-pct" class="highlight-green">100% Consistent</strong>
                         </div>
                     </div>
                 </div>
@@ -500,10 +500,10 @@
                                 <th>Name</th>
                                 <th>Qual Score</th>
                                 <th>Before Decision</th>
-                                <th>Before BGI</th>
+                                <th>Before Background</th>
                                 <th>After Decision</th>
-                                <th>After BGI</th>
-                                <th>Improvement</th>
+                                <th>After Background</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="mitigation-results-tbody"></tbody>
@@ -553,7 +553,7 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
                                 <div class="stat-pill">Qual Score: <strong id="scr-qual-score">92.0%</strong></div>
                                 <div class="stat-pill">Required Match: <strong id="scr-req-match">100.0%</strong></div>
                                 <div class="stat-pill">EFS: <strong id="scr-efs">96.0/100</strong></div>
-                                <div class="stat-pill">BGI Gap: <strong id="scr-bgi">8.0/100</strong></div>
+                                <div class="stat-pill">Background: <strong id="scr-bi">VERIFIED</strong></div>
                             </div>
 
                             <div class="skill-tags-group">
@@ -587,10 +587,10 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
                             <label class="control-label">Select API Endpoint:</label>
                             <select id="api-endpoint-selector" class="select-input">
                                 <option value="/api/evaluate">POST /api/evaluate (Full Candidate Assessment)</option>
+                                <option value="/api/background-investigation">POST /api/background-investigation (Candidate Background Investigation)</option>
                                 <option value="/api/evidence">POST /api/evidence (Evidence Traceability & Claims)</option>
                                 <option value="/api/skill-analysis">POST /api/skill-analysis (Skill Gap Analysis)</option>
                                 <option value="/api/qualification-score">POST /api/qualification-score (Score Breakdown)</option>
-                                <option value="/api/bgi">POST /api/bgi (Calculate Behavioral Gap Index)</option>
                                 <option value="/api/efs">POST /api/efs (Calculate Explanation Faithfulness)</option>
                                 <option value="/api/counterfactual">POST /api/counterfactual (Qualification Variation)</option>
                                 <option value="/api/decision-consistency">POST /api/decision-consistency (Pairwise Check)</option>
@@ -626,7 +626,7 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
     </main>
 
     <footer class="app-footer">
-        <p>AI Hiring Intelligence System — Final Year Engineering Project • Qualification-Based Assessment & Decision Auditing (BGI/EFS)</p>
+        <p>AI Hiring Intelligence System — Final Year Engineering Project • Qualification-Based Assessment & Decision Auditing (BI/EFS)</p>
     </footer>
 
     <script src="/static/js/app.js"></script>
