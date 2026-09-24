@@ -19,3 +19,19 @@ def test_experience_scaling():
     twin = make_qualification_variation(cand, "experience_years", "1.5")
     assert twin["experience_years"] == 1.5
     assert twin["education"] == "B.Tech"
+
+def test_combined_skill_and_experience_perturbation():
+    cand = {
+        "candidate_id": "SWE_001",
+        "name": "Alex",
+        "skills": "Python; SQL; Git; FastAPI",
+        "experience_years": 5.0,
+        "education": "B.Tech CS"
+    }
+    twin = make_qualification_variation(cand, "skills_and_experience", "Remove Core Skill")
+    assert "SQL" in twin["skills"]
+    assert twin["education"] == "B.Tech CS"
+
+
+
+

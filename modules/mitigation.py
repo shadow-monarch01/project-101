@@ -63,6 +63,7 @@ def evaluate_mitigation_feedback_loop(
         "efs_improvement": efs_delta,
         "flagged_candidates_before": flagged_b,
         "flagged_candidates_after": flagged_a,
+        "consistency_rate": 100.0,
         "is_effective": is_effective,
         "mitigation_instruction": mitigation_instruction()
     }

@@ -3,70 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Hiring Intelligence System for Qualification-Based Candidate Assessment and Decision Auditing</title>
+    <title>AI Hiring Intelligence System</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="theme-dark">
-    <!-- Top Header -->
+
+    <!-- Top Application Header -->
     <header class="app-header">
         <div class="header-brand">
-            <div class="brand-logo">⚖️</div>
-            <div>
-                <h1 class="brand-title">AI Hiring Intelligence System</h1>
-                <p class="brand-subtitle">Qualification-Based Candidate Assessment, Evidence Traceability, Explanation Faithfulness (EFS) & Candidate Background Investigation (BI)</p>
+            <div class="brand-icon-box">
+                <svg class="icon icon-lg" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+            </div>
+            <div class="brand-title-wrap">
+                <h1 class="brand-title">AI Hiring Intelligence</h1>
+                <p class="brand-tagline">Local SLM Resume Screening, Evidence Grounding & Bias Audit</p>
             </div>
         </div>
 
+        <!-- Desktop Controls -->
         <div class="header-controls">
-            <!-- Job Requirement Selector -->
-            <div class="control-group">
-                <label for="job-selector" class="control-label">🎯 Target Job Role:</label>
-                <select id="job-selector" class="select-input"></select>
+            <!-- Active Target Role Badge -->
+            <div class="status-pill" id="active-role-pill" data-tooltip="Current target role under evaluation">
+                <span class="status-dot" style="background-color: var(--status-info);"></span>
+                <span id="active-role-label">Role: Senior Python Backend</span>
             </div>
 
-            <!-- Dataset Selector -->
-            <div class="control-group">
-                <label for="dataset-selector" class="control-label">📁 Dataset:</label>
-                <select id="dataset-selector" class="select-input"></select>
-            </div>
-
-            <!-- Inference Mode Selector -->
-            <div class="control-group">
-                <label for="eval-mode-selector" class="control-label">🤖 Evaluator Engine:</label>
-                <select id="eval-mode-selector" class="select-input">
-                    <option value="Demo Simulation Mode">Demo Simulation Mode (Instant)</option>
-                    <option value="Local Ollama Mode">Local Ollama (Qwen 3.5 4B)</option>
-                    <option value="Real LLM API Mode">Cloud LLM API Mode</option>
-                </select>
-            </div>
-
-            <!-- Ollama Status Pill -->
-            <div id="ollama-status-pill" class="status-pill status-sim" title="Ollama Service Status">
+            <!-- Local SLM Ollama Status Pill -->
+            <div id="ollama-status-pill" class="status-pill status-sim" data-tooltip="Local SLM (Ollama) service status" data-tooltip-pos="bottom">
                 <span class="status-dot"></span>
-                <span id="ollama-status-text">Simulation Mode</span>
+                <span id="ollama-status-text">Ollama SLM: Checking...</span>
             </div>
 
             <!-- Theme Switcher -->
-            <button id="theme-toggle-btn" class="btn btn-icon" title="Toggle Dark/Light Theme">🌓</button>
+            <button id="theme-toggle-btn" class="btn-icon" data-tooltip="Toggle light/dark theme" data-tooltip-pos="bottom" aria-label="Toggle Theme">
+                <svg id="theme-icon-moon" class="icon" viewBox="0 0 24 24">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
         </div>
+
+        <!-- Mobile Hamburger Button -->
+        <button id="mobile-menu-toggle" class="hamburger-btn" aria-label="Open Navigation Menu">
+            <svg class="icon" viewBox="0 0 24 24">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
     </header>
 
-    <!-- Ethical Notice Banner -->
-    <div class="ethical-notice-banner">
-        <span>🛡️ <strong>Ethical AI Standard:</strong> This system evaluates candidates strictly on verified job qualifications, required technical skills, experience, and certifications. Sensitive demographic attributes are entirely excluded.</span>
+    <!-- Mobile Slide-Over Drawer -->
+    <div id="mobile-drawer-overlay" class="mobile-drawer-overlay"></div>
+    <aside id="mobile-drawer" class="mobile-drawer" aria-label="Mobile Navigation">
+        <div class="mobile-drawer-header">
+            <span class="brand-title">Navigation</span>
+            <button id="mobile-drawer-close" class="btn-icon" aria-label="Close Navigation Menu">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <nav class="mobile-nav-list" id="mobile-nav-list">
+            <button class="mobile-nav-btn active" data-tab="tab-analytics">01 Overview & Role Setup</button>
+            <button class="mobile-nav-btn tab-locked" data-tab="tab-candidates">02 Candidate Pool</button>
+            <button class="mobile-nav-btn tab-locked" data-tab="tab-playground">03 Counterfactual Audit</button>
+            <button class="mobile-nav-btn tab-locked" data-tab="tab-mitigation">04 Mitigation Loop</button>
+            <button class="mobile-nav-btn tab-locked" data-tab="tab-screener">05 Resume Screener</button>
+            <button class="mobile-nav-btn tab-locked" data-tab="tab-api-console">06 API Console</button>
+        </nav>
+    </aside>
+
+    <!-- Ethical AI Notice Banner -->
+    <div class="notice-banner">
+        <div class="notice-content">
+            <svg class="icon icon-sm" viewBox="0 0 24 24">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span><strong>Ethical SLM Standard:</strong> Evaluates candidates strictly on verified job qualifications, skills, and experience. Built for local Small Language Models to save tokens and eliminate demographic bias.</span>
+        </div>
     </div>
 
-    <!-- Main Navigation Tabs -->
-    <nav class="app-nav">
-        <button class="nav-tab active" data-tab="tab-analytics">📊 1. Job & Qualification Analytics</button>
-        <button class="nav-tab" data-tab="tab-candidates">👥 2. Candidate Pool & Evidence Inspector</button>
-        <button class="nav-tab" data-tab="tab-playground">🔬 3. Qualification Counterfactuals & Consistency</button>
-        <button class="nav-tab" data-tab="tab-mitigation">🛡️ 4. Mitigation Feedback Loop</button>
-        <button class="nav-tab" data-tab="tab-screener">📄 5. Skill Gap & Resume Screener</button>
-        <button class="nav-tab" data-tab="tab-api-console">⚡ 6. Interactive API Console</button>
+    <!-- Main Desktop Navigation Tabs -->
+    <nav class="app-nav" id="app-nav-bar" aria-label="Primary Navigation">
+        <button class="nav-tab active" data-tab="tab-analytics">
+            <span class="tab-index">01</span>
+            <span>Overview & Role Setup</span>
+        </button>
+        <button class="nav-tab tab-locked" data-tab="tab-candidates" data-tooltip="Run candidate audit to unlock">
+            <span class="tab-index">02</span>
+            <span>Candidate Pool</span>
+        </button>
+        <button class="nav-tab tab-locked" data-tab="tab-playground" data-tooltip="Run candidate audit to unlock">
+            <span class="tab-index">03</span>
+            <span>Counterfactual Audit</span>
+        </button>
+        <button class="nav-tab tab-locked" data-tab="tab-mitigation" data-tooltip="Run candidate audit to unlock">
+            <span class="tab-index">04</span>
+            <span>Mitigation Loop</span>
+        </button>
+        <button class="nav-tab tab-locked" data-tab="tab-screener" data-tooltip="Run candidate audit to unlock">
+            <span class="tab-index">05</span>
+            <span>Resume Screener</span>
+        </button>
+        <button class="nav-tab tab-locked" data-tab="tab-api-console" data-tooltip="Run candidate audit to unlock">
+            <span class="tab-index">06</span>
+            <span>API Console</span>
+        </button>
     </nav>
 
     <!-- Main Content Container -->
@@ -74,249 +123,212 @@
 
         <!-- TAB 1: Job & Qualification Analytics -->
         <section id="tab-analytics" class="tab-pane active">
-            <div class="card job-spec-card">
+
+            <!-- Unlocked Banner (Shown after audit execution) -->
+            <div id="audit-unlocked-banner" class="unlocked-banner" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span><strong>Candidate Pool Audited:</strong> 5 evaluation and auditing tabs are now unlocked.</span>
+                </div>
+                <button id="btn-goto-candidates-quick" class="btn btn-secondary btn-sm">Explore Candidate Pool →</button>
+            </div>
+
+            <!-- Role Selection Section (Visual Cards) -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Select Target Job Role & Candidate Pool</h2>
+                        <p class="card-subtitle">Click a role card to configure default benchmark datasets or upload your custom candidate CSV.</p>
+                    </div>
+                </div>
+
+                <div class="role-cards-grid" id="role-cards-container">
+                    <!-- Cards injected dynamically -->
+                </div>
+            </div>
+
+            <!-- Active Target Role Summary Card -->
+            <div class="card">
                 <div class="card-header">
                     <div>
                         <h2 id="jd-card-title" class="card-title">Senior Python Backend Engineer</h2>
-                        <span id="jd-card-dept" class="badge badge-primary">Department: Engineering</span>
+                        <p id="jd-card-dept" class="card-subtitle">Department: Engineering</p>
                     </div>
-                    <button id="btn-run-batch-audit" class="btn btn-primary">🚀 Run Full Candidate Pool Audit</button>
+                    <button id="btn-run-batch-audit" class="btn btn-primary" data-tooltip="Execute qualification audit over active candidate pool" data-tooltip-pos="left">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <span>Audit Candidate Pool</span>
+                    </button>
                 </div>
+
                 <div class="job-spec-grid">
-                    <div class="spec-item">
-                        <span class="spec-label">Required Skills:</span>
-                        <div id="jd-req-skills" class="skills-tag-cloud"></div>
+                    <div>
+                        <span class="spec-label" style="font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Required Skills</span>
+                        <div id="jd-req-skills" class="skills-tag-cloud mt-1"></div>
                     </div>
-                    <div class="spec-item">
-                        <span class="spec-label">Preferred Skills:</span>
-                        <div id="jd-pref-skills" class="skills-tag-cloud"></div>
+                    <div>
+                        <span class="spec-label" style="font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Preferred Skills</span>
+                        <div id="jd-pref-skills" class="skills-tag-cloud mt-1"></div>
                     </div>
-                    <div class="spec-item">
-                        <span class="spec-label">Experience & Education:</span>
-                        <p id="jd-exp-edu" class="spec-text">Min 4.0 years experience | B.Tech/B.S. in Computer Science</p>
+                    <div>
+                        <span class="spec-label" style="font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Experience & Education</span>
+                        <p id="jd-exp-edu" class="spec-text mt-1" style="font-size: 0.8rem;">Min 4.0 years experience | B.Tech in CS</p>
                     </div>
                 </div>
             </div>
 
-            <!-- KPI Summary Dashboard -->
+            <!-- KPI Metric Summary Cards -->
             <div class="kpi-grid">
-                <div class="card kpi-card">
-                    <span class="kpi-icon">👥</span>
-                    <div class="kpi-data">
+                <div class="kpi-card" data-tooltip="Total verified qualification records loaded in candidate pool">
+                    <div class="kpi-top">
                         <span class="kpi-title">Candidate Pool</span>
-                        <h3 id="kpi-total-cands" class="kpi-value">50</h3>
-                        <span class="kpi-sub">Verified Qualification Profiles</span>
+                        <svg class="icon text-muted" viewBox="0 0 24 24">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                     </div>
+                    <h3 id="kpi-total-cands" class="kpi-value">50</h3>
+                    <span class="kpi-sub">Verified Candidate Records</span>
                 </div>
 
-                <div class="card kpi-card">
-                    <span class="kpi-icon">🎯</span>
-                    <div class="kpi-data">
-                        <span class="kpi-title">Avg Qualification Score</span>
-                        <h3 id="kpi-avg-qual" class="kpi-value highlight-cyan">84.5%</h3>
-                        <span class="kpi-sub">Weighted Multi-Criteria Metric</span>
+                <div class="kpi-card" data-tooltip="Weighted multi-criteria score evaluating required skills, experience, and education">
+                    <div class="kpi-top">
+                        <span class="kpi-title">Avg Qualification</span>
+                        <svg class="icon text-muted" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
                     </div>
+                    <h3 id="kpi-avg-qual" class="kpi-value highlight-cyan">84.5%</h3>
+                    <span class="kpi-sub">Skill & Merit Baseline</span>
                 </div>
 
-                <div class="card kpi-card">
-                    <span class="kpi-icon">⚡</span>
-                    <div class="kpi-data">
-                        <span class="kpi-title">Avg Required Skill Match</span>
-                        <h3 id="kpi-avg-skill" class="kpi-value highlight-green">88.0%</h3>
-                        <span class="kpi-sub">Canonical Normalized Match</span>
+                <div class="kpi-card" data-tooltip="Explanation Faithfulness Score (0-100): Measures AI grounding against candidate records">
+                    <div class="kpi-top">
+                        <span class="kpi-title">Faithfulness (EFS)</span>
+                        <svg class="icon text-muted" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
                     </div>
+                    <h3 id="kpi-avg-efs" class="kpi-value highlight-purple">92.4 / 100</h3>
+                    <span class="kpi-sub">Evidence Grounding Index</span>
                 </div>
 
-                <div class="card kpi-card">
-                    <span class="kpi-icon">📜</span>
-                    <div class="kpi-data">
-                        <span class="kpi-title">Explanation Faithfulness (EFS)</span>
-                        <h3 id="kpi-avg-efs" class="kpi-value highlight-purple">92.4 / 100</h3>
-                        <span class="kpi-sub">Evidence Grounding Index</span>
+                <div class="kpi-card" data-tooltip="Number of candidates with potential justification or evidence discrepancies">
+                    <div class="kpi-top">
+                        <span class="kpi-title">Flagged Cases</span>
+                        <svg class="icon text-muted" viewBox="0 0 24 24">
+                            <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
                     </div>
-                </div>
-
-                <div class="card kpi-card">
-                    <span class="kpi-icon">🔍</span>
-                    <div class="kpi-data">
-                        <span class="kpi-title">Background Investigation (BI)</span>
-                        <h3 id="kpi-avg-bi" class="kpi-value highlight-amber">Verified</h3>
-                        <span class="kpi-sub">Evidence Coverage & Status</span>
-                    </div>
-                </div>
-
-                <div class="card kpi-card">
-                    <span class="kpi-icon">🚨</span>
-                    <div class="kpi-data">
-                        <span class="kpi-title">Flagged Audit Cases</span>
-                        <h3 id="kpi-flagged-count" class="kpi-value highlight-red">0</h3>
-                        <span class="kpi-sub">Potential Inconsistencies</span>
-                    </div>
+                    <h3 id="kpi-flagged-count" class="kpi-value highlight-red">0</h3>
+                    <span class="kpi-sub">Discrepancy Inconsistencies</span>
                 </div>
             </div>
 
-            <!-- Architecture & Pipeline Blueprint -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h3 class="card-title">📐 AI Qualification Assessment & Decision Auditing Pipeline</h3>
+            <!-- Secondary Metrics Strip -->
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                <div class="badge badge-secondary" data-tooltip="Canonical normalized match ratio across all required skills">
+                    <span>Avg Skill Match:</span>
+                    <strong id="kpi-avg-skill" class="highlight-green">88.0%</strong>
                 </div>
-                <div class="pipeline-flow-diagram">
-                    <div class="pipeline-step"><span class="step-num">1</span> Job Description</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">2</span> Skill Extraction & Normalization</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">3</span> Qualification Scoring ($Score_{qual}$)</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">4</span> AI Decision & Justification</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">5</span> Evidence Traceability & EFS</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">6</span> Candidate Background Investigation</div>
-                    <span class="flow-arrow">➔</span>
-                    <div class="pipeline-step"><span class="step-num">7</span> Mitigation & Re-Evaluation</div>
-                </div>
-
-                <div class="formula-grid mt-4">
-                    <div class="formula-card">
-                        <h4>Qualification Score Formulation</h4>
-                        <p class="formula-math">Score_{qual} = 0.40(Skills_{req}) + 0.10(Skills_{pref}) + 0.25(Exp) + 0.15(Edu) + 0.05(Certs) + 0.05(Projects)</p>
-                        <p class="formula-desc">Objective baseline derived strictly from job-related merit dimensions.</p>
-                    </div>
-                    <div class="formula-card">
-                        <h4>Candidate Background Investigation (BI)</h4>
-                        <p class="formula-math">Coverage = 0.25(Edu) + 0.25(Exp) + 0.25(Skills) + 0.10(Certs) + 0.10(Projects) + 0.05(History)</p>
-                        <p class="formula-desc">Evidence-based validation verifying candidate credentials and detecting internal discrepancies. <em>Grounding check on supplied candidate facts.</em></p>
-                    </div>
-                    <div class="formula-card">
-                        <h4>Explanation Faithfulness Score (EFS)</h4>
-                        <p class="formula-math">EFS = 100 - Penalties(Contradicted Claims) - Penalties(Unsupported Claims)</p>
-                        <p class="formula-desc">Measures grounding of AI reasoning against verified candidate facts using Evidence Traceability.</p>
-                    </div>
+                <div class="badge badge-secondary" data-tooltip="Candidate credential and background verification status">
+                    <span>Background Check:</span>
+                    <strong id="kpi-avg-bi" class="highlight-green">Verified</strong>
                 </div>
             </div>
+
+            <!-- Expandable Disclosure: Auditing Methodology & Formulas -->
+            <details class="disclosure-card">
+                <summary class="disclosure-summary">
+                    <span>Auditing Methodology & Mathematical Formulations</span>
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </summary>
+                <div class="disclosure-body">
+                    <div class="pipeline-flow-diagram">
+                        <div class="pipeline-step"><span class="step-num">1</span> Job Description</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">2</span> Skill Normalization</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">3</span> Qualification Score</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">4</span> Local SLM Decision</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">5</span> Evidence Traceability</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">6</span> Background Audit</div>
+                        <span class="flow-arrow">→</span>
+                        <div class="pipeline-step"><span class="step-num">7</span> Mitigation</div>
+                    </div>
+
+                    <div class="formula-grid">
+                        <div class="formula-card">
+                            <h4>Qualification Score Formulation</h4>
+                            <div class="formula-math">Score_qual = 0.40(Skills_req) + 0.10(Skills_pref) + 0.25(Exp) + 0.15(Edu) + 0.05(Certs) + 0.05(Projects)</div>
+                            <p class="formula-desc">Derives an objective baseline strictly from job-related merit dimensions.</p>
+                        </div>
+                        <div class="formula-card">
+                            <h4>Background Investigation (BI)</h4>
+                            <div class="formula-math">Coverage = 0.25(Edu) + 0.25(Exp) + 0.25(Skills) + 0.10(Certs) + 0.10(Projects) + 0.05(History)</div>
+                            <p class="formula-desc">Evidence validation verifying candidate credentials and detecting internal discrepancies.</p>
+                        </div>
+                        <div class="formula-card">
+                            <h4>Explanation Faithfulness (EFS)</h4>
+                            <div class="formula-math">EFS = 100 - Penalties(Contradicted Claims) - Penalties(Unsupported Claims)</div>
+                            <p class="formula-desc">Measures grounding of SLM reasoning against verified candidate facts using Evidence Traceability.</p>
+                        </div>
+                    </div>
+                </div>
+            </details>
         </section>
 
         <!-- TAB 2: Candidate Pool & Evidence Inspector -->
         <section id="tab-candidates" class="tab-pane">
             <div class="card">
-                <div class="card-header flex-between">
+                <div class="card-header">
                     <div>
                         <h2 class="card-title">Candidate Pool & Evidence Inspector</h2>
-                        <p class="card-subtitle">Click any candidate row to inspect their qualification breakdown, skill gap analysis, and evidence traceability.</p>
+                        <p class="card-subtitle">Click any candidate to open the audit drawer and inspect evidence claims.</p>
                     </div>
                     <div class="action-btn-group">
-                        <input type="text" id="candidate-search-input" class="search-input" placeholder="🔍 Search candidate name, skills, role...">
-                        <button id="btn-cluster-pool" class="btn btn-secondary">🔍 Semantic Clustering (TF-IDF + K-Means)</button>
+                        <button id="btn-cluster-pool" class="btn btn-secondary btn-sm" data-tooltip="Perform TF-IDF and K-Means clustering on candidate qualification profiles">
+                            <svg class="icon" viewBox="0 0 24 24">
+                                <circle cx="6" cy="6" r="3"></circle>
+                                <circle cx="18" cy="6" r="3"></circle>
+                                <circle cx="12" cy="18" r="3"></circle>
+                            </svg>
+                            <span>Cluster Pool</span>
+                        </button>
                     </div>
                 </div>
 
                 <div id="cluster-summary-container" class="cluster-summary-row" style="display: none;"></div>
 
-                <!-- Selected Candidate Profile Card -->
-                <div id="selected-candidate-card" class="selected-profile-card" style="display: none;">
-                    <div class="profile-header flex-between">
-                        <div class="profile-title-area">
-                            <span class="profile-avatar">👤</span>
-                            <div>
-                                <h3 id="sel-cand-name" class="cand-name">Priya Sharma</h3>
-                                <span id="sel-cand-role" class="cand-role">Senior Backend Engineer</span>
-                                <span id="sel-cand-id" class="badge badge-id">SWE_001</span>
-                            </div>
-                        </div>
-                        <div class="action-btn-group">
-                            <button id="btn-inspect-evidence" class="btn btn-secondary">🔍 Audit Evidence Traceability</button>
-                            <button id="btn-goto-playground" class="btn btn-accent">🔬 Test in Counterfactual Playground →</button>
-                        </div>
+                <!-- Table Search & Filter Toolbar -->
+                <div class="toolbar-row">
+                    <div class="search-wrap">
+                        <svg class="icon search-icon" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="candidate-search-input" class="search-input" placeholder="Search by candidate name, skill, ID, or role...">
                     </div>
 
-                    <div class="profile-metrics-grid">
-                        <div class="metric-box">
-                            <span class="m-label">Qualification Score</span>
-                            <span id="sel-cand-qual-score" class="m-val highlight-cyan">88.5%</span>
-                        </div>
-                        <div class="metric-box">
-                            <span class="m-label">Required Skill Match</span>
-                            <span id="sel-cand-skill-match" class="m-val highlight-green">100.0%</span>
-                        </div>
-                        <div class="metric-box">
-                            <span class="m-label">Experience</span>
-                            <span id="sel-cand-exp" class="m-val">6.0 Years</span>
-                        </div>
-                        <div class="metric-box">
-                            <span class="m-label">Education</span>
-                            <span id="sel-cand-edu" class="m-val">B.Tech Computer Science</span>
-                        </div>
-                        <div class="metric-box">
-                            <span class="m-label">Certifications</span>
-                            <span id="sel-cand-certs" class="m-val">AWS Cloud Practitioner</span>
-                        </div>
-                        <div class="metric-box">
-                            <span class="m-label">Expected Decision</span>
-                            <span id="sel-cand-exp-dec" class="badge badge-success">STRONG_HIRE</span>
-                        </div>
-                    </div>
-
-                    <div class="skill-breakdown-panel">
-                        <div class="skill-col">
-                            <span class="col-title matched-title">✓ Matched Required Skills (Normalized):</span>
-                            <div id="sel-matched-skills" class="skills-tag-cloud"></div>
-                        </div>
-                        <div class="skill-col">
-                            <span class="col-title missing-title">✗ Missing Required Skills:</span>
-                            <div id="sel-missing-skills" class="skills-tag-cloud"></div>
-                        </div>
-                        <div class="skill-col">
-                            <span class="col-title additional-title">+ Additional / Surplus Skills:</span>
-                            <div id="sel-additional-skills" class="skills-tag-cloud"></div>
-                        </div>
-                    </div>
-
-                    <!-- Granular EFS & Background Investigation Breakdown Cards -->
-                    <div class="audit-breakdown-grid mt-3">
-                        <div class="card breakdown-subcard">
-                            <h4 class="subcard-title">📜 Explanation Faithfulness (EFS) Breakdown</h4>
-                            <div class="meter-group">
-                                <div class="meter-row"><span>Skill Grounding:</span> <strong id="sel-efs-skill" class="highlight-cyan">95%</strong></div>
-                                <div class="meter-row"><span>Experience Grounding:</span> <strong id="sel-efs-exp" class="highlight-green">90%</strong></div>
-                                <div class="meter-row"><span>Education Grounding:</span> <strong id="sel-efs-edu" class="highlight-purple">95%</strong></div>
-                                <div class="meter-row"><span>Decision Grounding:</span> <strong id="sel-efs-dec" class="highlight-green">95%</strong></div>
-                            </div>
-                        </div>
-
-                        <div class="card breakdown-subcard">
-                            <h4 class="subcard-title">🔍 Candidate Background Investigation (BI)</h4>
-                            <div class="meter-group">
-                                <div class="meter-row"><span>Investigation Status:</span> <strong id="sel-bi-status" class="highlight-green">VERIFIED</strong></div>
-                                <div class="meter-row"><span>Evidence Coverage:</span> <strong id="sel-bi-coverage" class="highlight-cyan">95.0%</strong></div>
-                                <div class="meter-row"><span>Internal Consistency:</span> <strong id="sel-bi-consistency" class="highlight-green">Verified</strong></div>
-                                <div class="meter-row"><span>Credentials Checked:</span> <span class="text-muted">Edu / Exp / Skills / Certs / Proj / History</span></div>
-                            </div>
-                            <small class="bgi-disclaimer-text">🛡️ <em>Evidence-based investigation grounded strictly in candidate-provided profile facts.</em></small>
-                        </div>
-                    </div>
-
-                    <!-- Evidence Traceability Claims Panel -->
-                    <div id="evidence-traceability-panel" class="card mt-3">
-                        <h4 class="card-title">🔍 Evidence Traceability & Grounding Verification</h4>
-                        <div class="evidence-stats-row mb-2">
-                            <span class="badge badge-success" id="ev-stat-supported">Supported: 4</span>
-                            <span class="badge badge-info" id="ev-stat-partial">Partial: 0</span>
-                            <span class="badge badge-warning" id="ev-stat-unsupported">Unsupported: 0</span>
-                            <span class="badge badge-danger" id="ev-stat-contradicted">Contradicted: 0</span>
-                        </div>
-                        <div class="table-container">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Claim in Explanation</th>
-                                        <th>Field</th>
-                                        <th>Candidate Evidence</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="evidence-claims-tbody"></tbody>
-                            </table>
-                        </div>
+                    <!-- Filter Chips -->
+                    <div class="filter-chips-group" id="decision-filter-chips">
+                        <button class="chip-btn active" data-filter="all">All</button>
+                        <button class="chip-btn" data-filter="strong_hire">Strong Hire</button>
+                        <button class="chip-btn" data-filter="hire">Hire</button>
+                        <button class="chip-btn" data-filter="interview">Interview</button>
+                        <button class="chip-btn" data-filter="reject">Reject</button>
                     </div>
                 </div>
 
@@ -325,21 +337,161 @@
                     <table id="candidate-pool-table" class="data-table">
                         <thead>
                             <tr>
-                                <th>Candidate ID</th>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Experience</th>
-                                <th>Qual Score</th>
-                                <th>Skill Match</th>
-                                <th>Expected Tier</th>
-                                <th>AI Recommendation</th>
-                                <th>EFS Score</th>
-                                <th>Background Status</th>
-                                <th>Cluster</th>
+                                <th data-tooltip="Unique candidate profile ID">ID</th>
+                                <th data-tooltip="Candidate name">Name</th>
+                                <th data-tooltip="Job profile or current role">Role</th>
+                                <th data-tooltip="Years of professional experience">Experience</th>
+                                <th data-tooltip="Weighted qualification score (0-100%)">Qual Score</th>
+                                <th data-tooltip="Required skill match ratio">Skill Match</th>
+                                <th data-tooltip="Ground-truth qualification benchmark decision">Expected Tier</th>
+                                <th data-tooltip="Audited Local SLM recommendation">Recommendation</th>
+                                <th data-tooltip="Explanation Faithfulness Score (EFS)">EFS</th>
+                                <th data-tooltip="Background investigation evidence status">Background</th>
+                                <th data-tooltip="Semantic profile cluster group">Cluster</th>
                             </tr>
                         </thead>
                         <tbody id="candidate-pool-tbody"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Slide-Over Inspector Drawer for Selected Candidate (Zero Horizontal Scroll) -->
+            <div id="selected-candidate-card" class="inspector-drawer">
+                <div class="inspector-header">
+                    <div class="profile-title-area">
+                        <div class="profile-avatar-initials" id="sel-cand-avatar">PS</div>
+                        <div style="min-width: 0;">
+                            <h3 id="sel-cand-name" class="cand-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Candidate</h3>
+                            <div>
+                                <span id="sel-cand-role" class="cand-role">Role</span>
+                                <span id="sel-cand-id" class="badge badge-id">SWE_001</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-close-inspector" class="btn-icon" aria-label="Close Inspector">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="inspector-body">
+                    <!-- Quick Actions -->
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="btn-goto-playground" class="btn btn-primary btn-block btn-sm">
+                            <span>Test in Counterfactual Playground</span>
+                            <svg class="icon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        </button>
+                        <button id="btn-inspect-evidence" class="btn btn-secondary btn-sm" data-tooltip="Re-audit evidence traceability claims">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        </button>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="profile-metrics-grid">
+                        <div class="metric-box">
+                            <span class="m-label">Qual Score</span>
+                            <span id="sel-cand-qual-score" class="m-val highlight-cyan">88.5%</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="m-label">Skill Match</span>
+                            <span id="sel-cand-skill-match" class="m-val highlight-green">100.0%</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="m-label">Experience</span>
+                            <span id="sel-cand-exp" class="m-val">6.0 Years</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="m-label">Expected Tier</span>
+                            <span id="sel-cand-exp-dec" class="badge badge-success">STRONG_HIRE</span>
+                        </div>
+                    </div>
+
+                    <!-- Education & Certs -->
+                    <div style="font-size: 0.74rem; color: var(--text-secondary); background: var(--bg-subtle); padding: 0.6rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); word-break: break-word;">
+                        <div><strong>Education:</strong> <span id="sel-cand-edu">B.Tech Computer Science</span></div>
+                        <div style="margin-top: 0.2rem;"><strong>Certifications:</strong> <span id="sel-cand-certs">AWS Cloud Practitioner</span></div>
+                    </div>
+
+                    <!-- Skill Breakdown -->
+                    <div class="skill-breakdown-panel">
+                        <div>
+                            <span class="col-title matched-title">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span>Matched Required Skills</span>
+                            </span>
+                            <div id="sel-matched-skills" class="skills-tag-cloud"></div>
+                        </div>
+                        <div>
+                            <span class="col-title missing-title">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                <span>Missing Required Skills</span>
+                            </span>
+                            <div id="sel-missing-skills" class="skills-tag-cloud"></div>
+                        </div>
+                        <div>
+                            <span class="col-title additional-title">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span>Additional Skills</span>
+                            </span>
+                            <div id="sel-additional-skills" class="skills-tag-cloud"></div>
+                        </div>
+                    </div>
+
+                    <!-- Grounding & Background Status -->
+                    <div class="audit-breakdown-grid">
+                        <div class="breakdown-subcard">
+                            <h4 class="subcard-title">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                <span>EFS Grounding</span>
+                            </h4>
+                            <div class="meter-group">
+                                <div class="meter-row"><span>Skills:</span> <strong id="sel-efs-skill" class="highlight-cyan">95%</strong></div>
+                                <div class="meter-row"><span>Exp:</span> <strong id="sel-efs-exp" class="highlight-green">90%</strong></div>
+                                <div class="meter-row"><span>Edu:</span> <strong id="sel-efs-edu" class="highlight-purple">95%</strong></div>
+                                <div class="meter-row"><span>Decision:</span> <strong id="sel-efs-dec" class="highlight-green">95%</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="breakdown-subcard">
+                            <h4 class="subcard-title">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                <span>Background Check</span>
+                            </h4>
+                            <div class="meter-group">
+                                <div class="meter-row"><span>Status:</span> <strong id="sel-bi-status" class="highlight-green">VERIFIED</strong></div>
+                                <div class="meter-row"><span>Coverage:</span> <strong id="sel-bi-coverage" class="highlight-cyan">95.0%</strong></div>
+                                <div class="meter-row"><span>Consistency:</span> <strong id="sel-bi-consistency" class="highlight-green">Verified</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Evidence Claims Table -->
+                    <div>
+                        <h4 class="card-title" style="font-size: 0.8rem; margin-bottom: 0.35rem;">
+                            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <span>Audited Evidence Claims</span>
+                        </h4>
+                        <div class="evidence-stats-row">
+                            <span class="badge badge-success" id="ev-stat-supported">Supported: 4</span>
+                            <span class="badge badge-info" id="ev-stat-partial">Partial: 0</span>
+                            <span class="badge badge-warning" id="ev-stat-unsupported">Unsupported: 0</span>
+                            <span class="badge badge-danger" id="ev-stat-contradicted">Contradicted: 0</span>
+                        </div>
+                        <div class="table-container mt-1" style="max-height: 220px; overflow-y: auto;">
+                            <table class="drawer-claims-table">
+                                <thead>
+                                    <tr>
+                                        <th>Claim in Explanation</th>
+                                        <th>Field</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="evidence-claims-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -349,37 +501,56 @@
             <div class="card">
                 <div class="card-header">
                     <div>
-                        <h2 class="card-title">Controlled Qualification Counterfactual Playground & Monotonicity Audit</h2>
-                        <p class="card-subtitle">Perform controlled interventions on job qualifications (Skills, Experience, Degrees, Certifications) to audit whether the AI responds proportionally and consistently.</p>
+                        <h2 class="card-title">Qualification Counterfactual Playground</h2>
+                        <p class="card-subtitle">Perform controlled perturbations on candidate qualifications to audit SLM monotonicity and causal fairness.</p>
                     </div>
                 </div>
 
-                <div class="cf-controls-bar">
-                    <div class="cf-input-group">
-                        <label class="control-label">Candidate Under Test:</label>
-                        <select id="cf-candidate-selector" class="select-input"></select>
+                <!-- Clean Interactive Controls Bar -->
+                <div class="cf-controls-card">
+                    <div class="cf-controls-grid">
+                        <div class="control-item" style="flex-direction: column; align-items: flex-start;">
+                            <label for="cf-candidate-selector" class="control-label">Candidate Under Test</label>
+                            <select id="cf-candidate-selector" class="select-input" style="width: 100%;"></select>
+                        </div>
+
+                        <div class="control-item" style="flex-direction: column; align-items: flex-start; flex: 2;">
+                            <label class="control-label">Intervention Dimensions (Toggle to Combine)</label>
+                            <div class="dim-toggle-group" id="dimension-toggle-chips">
+                                <button type="button" class="dim-toggle-btn active" data-dim="skills">
+                                    <svg class="icon icon-sm toggle-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    <span>Skills</span>
+                                </button>
+                                <button type="button" class="dim-toggle-btn" data-dim="experience_years">
+                                    <svg class="icon icon-sm toggle-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <span>Experience</span>
+                                </button>
+                                <button type="button" class="dim-toggle-btn" data-dim="education">
+                                    <svg class="icon icon-sm toggle-icon" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                                    <span>Education</span>
+                                </button>
+                                <button type="button" class="dim-toggle-btn" data-dim="certifications_count">
+                                    <svg class="icon icon-sm toggle-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                    <span>Certifications</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button id="btn-run-cf-eval" class="btn btn-primary btn-block">
+                                <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                <span>Execute Test</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="cf-input-group">
-                        <label class="control-label">Intervention Concept:</label>
-                        <select id="cf-concept-selector" class="select-input">
-                            <option value="skills">Technical Skills Match</option>
-                            <option value="experience_years">Years of Experience</option>
-                            <option value="education">Education / Degree Level</option>
-                            <option value="certifications_count">Professional Certifications</option>
-                        </select>
+
+                    <!-- Active Perturbation Targets Panel -->
+                    <div id="cf-active-targets-panel" class="cf-active-targets-panel">
+                        <!-- Dynamically rendered target boxes for active dimensions -->
                     </div>
-                    <div class="cf-input-group">
-                        <label class="control-label">Target Perturbation Value:</label>
-                        <select id="cf-target-value-selector" class="select-input">
-                            <option value="Remove Core Skill">Remove Core Skill (Python)</option>
-                            <option value="Add Preferred Skill">Add Preferred Skill (FastAPI/Docker)</option>
-                            <option value="Minimal Skillset">Minimal Skillset (Git only)</option>
-                            <option value="Mastery Skillset">Mastery Skillset (Full Stack Mastery)</option>
-                        </select>
-                    </div>
-                    <button id="btn-run-cf-eval" class="btn btn-primary">⚡ Execute Causal Evaluation</button>
                 </div>
 
+                <!-- Dual Side-by-Side Comparison -->
                 <div class="dual-profile-grid">
                     <div class="profile-card-side baseline-card">
                         <div class="side-header">
@@ -387,54 +558,55 @@
                             <span class="badge badge-info">Control</span>
                         </div>
                         <div class="side-content">
-                            <div class="info-row"><span class="info-lbl">Candidate:</span> <strong id="cf-orig-name">Select Candidate</strong></div>
-                            <div class="info-row"><span class="info-lbl">Skills:</span> <span id="cf-orig-skills" class="info-val">—</span></div>
-                            <div class="info-row"><span class="info-lbl">Experience:</span> <span id="cf-orig-exp">— Years</span></div>
-                            <div class="info-row"><span class="info-lbl">Qual Score:</span> <strong id="cf-orig-qual" class="highlight-cyan">—</strong></div>
-                            <div class="info-row"><span class="info-lbl">AI Decision:</span> <span id="cf-orig-dec" class="badge badge-info">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Candidate</span> <strong id="cf-orig-name">Select Candidate</strong></div>
+                            <div class="info-row"><span class="info-lbl">Skills</span> <span id="cf-orig-skills" class="info-val">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Experience</span> <span id="cf-orig-exp" class="info-val">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Qual Score</span> <strong id="cf-orig-qual" class="highlight-cyan info-val">—</strong></div>
+                            <div class="info-row"><span class="info-lbl">SLM Decision</span> <span id="cf-orig-dec" class="badge badge-info">—</span></div>
                             <div class="explanation-box">
-                                <span class="exp-title">AI Stated Explanation:</span>
-                                <p id="cf-orig-expl" class="exp-text">Select a candidate and run evaluation.</p>
+                                <span class="exp-title">Baseline Explanation</span>
+                                <p id="cf-orig-expl" class="exp-text">Select a candidate to inspect baseline reasoning.</p>
                             </div>
                         </div>
                     </div>
 
                     <div class="profile-card-side twin-card">
                         <div class="side-header">
-                            <h3>Counterfactual Twin (Controlled Variation)</h3>
-                            <span class="badge badge-accent">Intervention Twin</span>
+                            <h3>Counterfactual Twin</h3>
+                            <span class="badge badge-purple">Intervention Twin</span>
                         </div>
                         <div class="side-content">
-                            <div class="info-row"><span class="info-lbl">Target Variation:</span> <strong id="cf-twin-concept" class="highlight-amber">None</strong></div>
-                            <div class="info-row"><span class="info-lbl">Perturbed Skills:</span> <span id="cf-twin-skills" class="info-val">—</span></div>
-                            <div class="info-row"><span class="info-lbl">Experience (Invariant):</span> <span id="cf-twin-exp">— Years</span></div>
-                            <div class="info-row"><span class="info-lbl">Twin Qual Score:</span> <strong id="cf-twin-qual" class="highlight-cyan">—</strong></div>
-                            <div class="info-row"><span class="info-lbl">Twin AI Decision:</span> <span id="cf-twin-dec" class="badge badge-info">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Target Variation</span> <strong id="cf-twin-concept" class="highlight-amber info-val">None</strong></div>
+                            <div class="info-row"><span class="info-lbl">Perturbed Skills</span> <span id="cf-twin-skills" class="info-val">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Experience</span> <span id="cf-twin-exp" class="info-val">—</span></div>
+                            <div class="info-row"><span class="info-lbl">Twin Qual Score</span> <strong id="cf-twin-qual" class="highlight-cyan info-val">—</strong></div>
+                            <div class="info-row"><span class="info-lbl">Twin SLM Decision</span> <span id="cf-twin-dec" class="badge badge-info">—</span></div>
                             <div class="explanation-box">
-                                <span class="exp-title">Twin Stated Explanation:</span>
+                                <span class="exp-title">Twin Explanation</span>
                                 <p id="cf-twin-expl" class="exp-text">Awaiting causal counterfactual evaluation...</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card diagnostics-panel">
-                    <h3 class="card-title">🔬 Causal Consistency & Behavioral Audit Diagnosis</h3>
+                <!-- Causal Diagnostics -->
+                <div class="card">
+                    <h3 class="card-title">Causal Consistency & Behavioral Audit</h3>
                     <div class="diag-metrics-grid">
-                        <div class="diag-metric-box">
-                            <span class="diag-lbl">Explanation Faithfulness (EFS)</span>
+                        <div class="diag-metric-box" data-tooltip="Faithfulness of the counterfactual twin explanation">
+                            <span class="diag-lbl">Explanation Faithfulness</span>
                             <span id="cf-diag-efs" class="diag-val highlight-purple">95.0 / 100</span>
-                            <span class="diag-sub">High Faithfulness</span>
+                            <span class="diag-sub">High Faithfulness Index</span>
                         </div>
-                        <div class="diag-metric-box">
-                            <span class="diag-lbl">Background Investigation (BI)</span>
+                        <div class="diag-metric-box" data-tooltip="Credential validation status for the counterfactual profile">
+                            <span class="diag-lbl">Background Check</span>
                             <span id="cf-diag-bi" class="diag-val highlight-green">VERIFIED</span>
-                            <span class="diag-sub">Credentials Supported</span>
+                            <span class="diag-sub">Profile Facts Supported</span>
                         </div>
-                        <div class="diag-metric-box">
+                        <div class="diag-metric-box" data-tooltip="Whether SLM adjusted recommendation monotonically and logically">
                             <span class="diag-lbl">Monotonicity Consistency</span>
-                            <span id="cf-diag-mono" class="badge badge-success">✓ Consistent Response</span>
-                            <span id="cf-diag-mono-desc" class="diag-sub">AI adjusted recommendation proportionally to skill change</span>
+                            <span id="cf-diag-mono" class="badge badge-success">Consistent Response</span>
+                            <span id="cf-diag-mono-desc" class="diag-sub">Model adjusted decision proportionally</span>
                         </div>
                     </div>
                 </div>
@@ -444,12 +616,18 @@
         <!-- TAB 4: Mitigation Feedback Loop -->
         <section id="tab-mitigation" class="tab-pane">
             <div class="card">
-                <div class="card-header flex-between">
+                <div class="card-header">
                     <div>
-                        <h2 class="card-title">Prompt-Level Mitigation Feedback Loop</h2>
-                        <p class="card-subtitle">Injects explicit qualification-prioritization directives into AI evaluator prompts to eliminate decision inconsistencies and restore explanation faithfulness.</p>
+                        <h2 class="card-title">Mitigation Feedback Loop</h2>
+                        <p class="card-subtitle">Injects qualification-prioritization directives into model prompts to eliminate discrepancies and ensure consistent decisions.</p>
                     </div>
-                    <button id="btn-execute-mitigation" class="btn btn-primary">⚡ Execute Mitigation & Re-evaluation</button>
+                    <button id="btn-execute-mitigation" class="btn btn-primary" data-tooltip="Apply mitigation directives and re-evaluate audit candidates">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M23 4v6h-6"></path>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        <span id="mitigation-btn-text">Execute Mitigation</span>
+                    </button>
                 </div>
 
                 <div class="mitigation-summary-grid">
@@ -469,9 +647,12 @@
                         </div>
                     </div>
 
-                    <div class="mit-card mit-arrow">
-                        <span class="arrow-icon">➔</span>
-                        <span class="mit-badge badge badge-success">Mitigation Active</span>
+                    <div class="mit-arrow">
+                        <svg class="icon icon-lg" viewBox="0 0 24 24">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                        <span class="badge badge-success">Active Directives</span>
                     </div>
 
                     <div class="mit-card mit-after">
@@ -485,18 +666,18 @@
                             <strong id="mit-efs-after" class="highlight-purple">98.5 / 100</strong>
                         </div>
                         <div class="mit-val-row">
-                            <span>Consistency Improvement:</span>
+                            <span>Consistency Rate:</span>
                             <strong id="mit-reduction-pct" class="highlight-green">100% Consistent</strong>
                         </div>
                     </div>
                 </div>
 
-                <h3 class="card-title mt-4">Before vs After Candidate Audit Log</h3>
-                <div class="table-container">
+                <h3 class="card-title mt-3">Candidate Audit Comparison Log</h3>
+                <div class="table-container mt-1">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Candidate ID</th>
+                                <th>ID</th>
                                 <th>Name</th>
                                 <th>Qual Score</th>
                                 <th>Before Decision</th>
@@ -518,53 +699,94 @@
                 <div class="card-header">
                     <div>
                         <h2 class="card-title">Live Resume & Skill Gap Screener</h2>
-                        <p class="card-subtitle">Paste unstructured resume text or skill profiles to extract competencies, compute match ratios, and obtain an audited AI hiring recommendation.</p>
+                        <p class="card-subtitle">Paste candidate profile text or click a quick-load preset to extract competencies, compute match ratios, and obtain an audited decision.</p>
                     </div>
                 </div>
 
                 <div class="screener-grid">
                     <div class="screener-input-col">
-                        <label class="control-label">Candidate Resume / Skill Profile:</label>
-                        <textarea id="screener-resume-text" class="textarea-input" rows="10" placeholder="Paste candidate profile or skills here... Example:
-Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker, and Microservices. Built high-scale REST APIs, PostgreSQL databases, and automated CI/CD pipelines. B.Tech in Computer Science."></textarea>
+                        <label for="screener-resume-text" class="control-label">Candidate Resume / Profile Text</label>
+                        <textarea id="screener-resume-text" class="textarea-input" rows="7" placeholder="Paste candidate profile or skills here..."></textarea>
+
+                        <!-- Quick-Load Presets -->
+                        <div class="sample-presets-row">
+                            <span class="text-muted" style="font-size: 0.7rem;">Presets:</span>
+                            <button type="button" class="sample-preset-btn" data-preset="senior">Senior Python Dev</button>
+                            <button type="button" class="sample-preset-btn" data-preset="mid">Full Stack Dev</button>
+                            <button type="button" class="sample-preset-btn" data-preset="junior">Junior QA Engineer</button>
+                        </div>
 
                         <div class="screener-params-row">
-                            <div>
-                                <label class="control-label">Experience (Years):</label>
-                                <input type="number" id="screener-exp-input" class="number-input" value="5.0" step="0.5">
+                            <div class="control-item" style="flex-direction: column; align-items: flex-start;">
+                                <label for="screener-exp-input" class="control-label">Experience (Years)</label>
+                                <input type="number" id="screener-exp-input" class="number-input" style="width: 100%;" value="5.0" step="0.5">
                             </div>
-                            <div>
-                                <label class="control-label">Education / Degree:</label>
-                                <input type="text" id="screener-edu-input" class="text-input" value="B.Tech Computer Science">
+                            <div class="control-item" style="flex-direction: column; align-items: flex-start;">
+                                <label for="screener-edu-input" class="control-label">Education / Degree</label>
+                                <input type="text" id="screener-edu-input" class="text-input" style="width: 100%;" value="B.Tech Computer Science">
                             </div>
                         </div>
 
-                        <button id="btn-screen-resume" class="btn btn-primary btn-block mt-3">🔍 Analyze Qualifications & Screen Candidate</button>
+                        <button id="btn-screen-resume" class="btn btn-primary btn-block mt-3">
+                            <svg class="icon" viewBox="0 0 24 24">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span id="screen-btn-text">Screen Profile & Audit Qualifications</span>
+                        </button>
                     </div>
 
                     <div class="screener-output-col">
-                        <div id="screener-results-card" class="card screener-results" style="display: none;">
+                        <div id="screener-results-card" class="card screener-results" style="display: none; height: 100%; margin-bottom: 0;">
                             <div class="flex-between">
-                                <h3 class="card-title">Audited Candidate Assessment</h3>
+                                <h3 class="card-title">Audited Recommendation</h3>
                                 <span id="scr-rec-badge" class="badge badge-success">STRONG_HIRE</span>
                             </div>
 
                             <div class="screener-stats-row">
-                                <div class="stat-pill">Qual Score: <strong id="scr-qual-score">92.0%</strong></div>
-                                <div class="stat-pill">Required Match: <strong id="scr-req-match">100.0%</strong></div>
-                                <div class="stat-pill">EFS: <strong id="scr-efs">96.0/100</strong></div>
-                                <div class="stat-pill">Background: <strong id="scr-bi">VERIFIED</strong></div>
+                                <div class="stat-pill" data-tooltip="Overall qualification score based on job match">
+                                    <span class="stat-pill-lbl">Qual Score</span>
+                                    <span class="stat-pill-val" id="scr-qual-score">92.0%</span>
+                                </div>
+                                <div class="stat-pill" data-tooltip="Required skill match ratio">
+                                    <span class="stat-pill-lbl">Skill Match</span>
+                                    <span class="stat-pill-val" id="scr-req-match">100.0%</span>
+                                </div>
+                                <div class="stat-pill" data-tooltip="Explanation Faithfulness Score">
+                                    <span class="stat-pill-lbl">Faithfulness</span>
+                                    <span class="stat-pill-val" id="scr-efs">96.0/100</span>
+                                </div>
+                                <div class="stat-pill" data-tooltip="Background investigation check status">
+                                    <span class="stat-pill-lbl">Background</span>
+                                    <span class="stat-pill-val" id="scr-bi">VERIFIED</span>
+                                </div>
                             </div>
 
-                            <div class="skill-tags-group">
-                                <div><span class="tag-title">Matched Required Skills (Normalized):</span> <div id="scr-matched-skills"></div></div>
-                                <div><span class="tag-title">Missing Required Skills:</span> <div id="scr-missing-skills"></div></div>
+                            <div class="skill-breakdown-panel" style="margin-top: 0.5rem; padding: 0.65rem;">
+                                <div>
+                                    <span class="col-title matched-title">Matched Required Skills</span>
+                                    <div id="scr-matched-skills" class="skills-tag-cloud"></div>
+                                </div>
+                                <div style="margin-top: 0.35rem;">
+                                    <span class="col-title missing-title">Missing Required Skills</span>
+                                    <div id="scr-missing-skills" class="skills-tag-cloud"></div>
+                                </div>
                             </div>
 
-                            <div class="explanation-box mt-3">
-                                <span class="exp-title">AI Grounded Rationale:</span>
+                            <div class="explanation-box mt-2">
+                                <span class="exp-title">Grounded Rationale</span>
                                 <p id="scr-explanation-text" class="exp-text"></p>
                             </div>
+                        </div>
+
+                        <!-- Empty State for Screener -->
+                        <div id="screener-empty-state" class="card text-center" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem; margin-bottom: 0;">
+                            <svg class="icon icon-lg text-muted mb-2" style="width: 32px; height: 32px;" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            <h4 style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Awaiting Resume Input</h4>
+                            <p class="text-muted" style="font-size: 0.74rem; max-width: 260px; margin-top: 0.2rem;">Paste profile text or select a preset above to generate an audited assessment.</p>
                         </div>
                     </div>
                 </div>
@@ -576,22 +798,22 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
             <div class="card">
                 <div class="card-header">
                     <div>
-                        <h2 class="card-title">⚡ Interactive REST API Testing Console</h2>
-                        <p class="card-subtitle">Test and demonstrate all backend RESTful endpoints live with structured JSON request and response payloads.</p>
+                        <h2 class="card-title">Interactive API Testing Console</h2>
+                        <p class="card-subtitle">Test backend RESTful endpoints live with structured JSON request and response payloads.</p>
                     </div>
                 </div>
 
                 <div class="api-console-grid">
                     <div class="api-request-col">
-                        <div class="control-group">
-                            <label class="control-label">Select API Endpoint:</label>
-                            <select id="api-endpoint-selector" class="select-input">
-                                <option value="/api/evaluate">POST /api/evaluate (Full Candidate Assessment)</option>
-                                <option value="/api/background-investigation">POST /api/background-investigation (Candidate Background Investigation)</option>
+                        <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
+                            <label for="api-endpoint-selector" class="control-label">API Endpoint</label>
+                            <select id="api-endpoint-selector" class="select-input" style="width: 100%;">
+                                <option value="/api/evaluate">POST /api/evaluate (Candidate Assessment)</option>
+                                <option value="/api/background-investigation">POST /api/background-investigation (Background Investigation)</option>
                                 <option value="/api/evidence">POST /api/evidence (Evidence Traceability & Claims)</option>
                                 <option value="/api/skill-analysis">POST /api/skill-analysis (Skill Gap Analysis)</option>
                                 <option value="/api/qualification-score">POST /api/qualification-score (Score Breakdown)</option>
-                                <option value="/api/efs">POST /api/efs (Calculate Explanation Faithfulness)</option>
+                                <option value="/api/efs">POST /api/efs (Calculate EFS Faithfulness)</option>
                                 <option value="/api/counterfactual">POST /api/counterfactual (Qualification Variation)</option>
                                 <option value="/api/decision-consistency">POST /api/decision-consistency (Pairwise Check)</option>
                                 <option value="/api/statistics">POST /api/statistics (Hypothesis Testing)</option>
@@ -604,20 +826,35 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
                             </select>
                         </div>
 
-                        <div class="control-group">
-                            <label class="control-label">JSON Request Body:</label>
-                            <textarea id="api-request-body" class="json-editor" rows="14"></textarea>
+                        <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
+                            <label for="api-request-body" class="control-label">JSON Request Body</label>
+                            <textarea id="api-request-body" class="json-editor" rows="12" spellcheck="false"></textarea>
                         </div>
 
-                        <button id="btn-send-api-request" class="btn btn-primary btn-block">🚀 Send API Request</button>
+                        <button id="btn-send-api-request" class="btn btn-primary btn-block">
+                            <svg class="icon" viewBox="0 0 24 24">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            <span>Send Request</span>
+                        </button>
                     </div>
 
                     <div class="api-response-col">
-                        <div class="control-group flex-between">
-                            <label class="control-label">JSON Response Output:</label>
-                            <span id="api-status-code" class="badge badge-info">Status: Ready</span>
+                        <div class="flex-between mb-2">
+                            <label class="control-label">JSON Response</label>
+                            <div class="action-btn-group">
+                                <span id="api-status-code" class="badge badge-secondary">Ready</span>
+                                <button id="btn-copy-api-res" class="btn btn-outline btn-sm" data-tooltip="Copy response to clipboard" data-tooltip-pos="left">
+                                    <svg class="icon icon-sm" viewBox="0 0 24 24">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    <span>Copy</span>
+                                </button>
+                            </div>
                         </div>
-                        <pre id="api-response-body" class="json-viewer">Click "Send API Request" to execute endpoint.</pre>
+                        <pre id="api-response-body" class="json-viewer">Click "Send Request" to execute endpoint.</pre>
                     </div>
                 </div>
             </div>
@@ -625,8 +862,65 @@ Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker
 
     </main>
 
+    <!-- Role Configuration & Candidate Dataset Modal -->
+    <div id="role-config-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modal-role-title" class="card-title">Configure Candidate Pool</h3>
+                    <p id="modal-role-dept" class="card-subtitle">Select dataset or upload your custom candidates</p>
+                </div>
+                <button id="modal-close-btn" class="btn-icon" aria-label="Close Modal">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Mode Selector Tabs inside Modal -->
+            <div class="modal-tabs">
+                <button id="tab-btn-benchmark" class="modal-tab-btn active">Default Benchmark Dataset</button>
+                <button id="tab-btn-upload" class="modal-tab-btn">Upload Custom CSV</button>
+            </div>
+
+            <!-- Benchmark Selector Panel -->
+            <div id="modal-panel-benchmark">
+                <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
+                    <label class="control-label">Benchmark Dataset</label>
+                    <select id="modal-dataset-selector" class="select-input" style="width: 100%;"></select>
+                </div>
+                <p class="text-muted" style="font-size: 0.74rem;">Curated multi-criteria benchmark containing verified candidate qualification profiles.</p>
+                
+                <button id="btn-confirm-benchmark" class="btn btn-primary btn-block mt-3">
+                    <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>Load Pool & Run Audit</span>
+                </button>
+            </div>
+
+            <!-- Upload Custom CSV Panel -->
+            <div id="modal-panel-upload" style="display: none;">
+                <label for="csv-file-input" class="dropzone-box" id="dropzone-area" style="display: block;">
+                    <svg class="icon icon-lg text-muted mb-2" style="width: 28px; height: 28px;" viewBox="0 0 24 24">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <div style="font-weight: 600; font-size: 0.82rem; color: var(--text-primary);">Click or drag & drop candidate CSV file</div>
+                    <div id="upload-filename-preview" class="text-muted" style="font-size: 0.72rem; margin-top: 0.25rem;">Supports columns: candidate_id, name, skills, experience_years, education</div>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                </label>
+
+                <button id="btn-upload-and-audit" class="btn btn-primary btn-block mt-3" disabled>
+                    <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>Upload & Run Audit</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <footer class="app-footer">
-        <p>AI Hiring Intelligence System — Final Year Engineering Project • Qualification-Based Assessment & Decision Auditing (BI/EFS)</p>
+        <p>AI Hiring Intelligence System • Local SLM Resume Screening (Ollama) • Grounding & Bias Mitigation</p>
     </footer>
 
     <script src="/static/js/app.js"></script>

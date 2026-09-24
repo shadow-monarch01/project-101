@@ -11,38 +11,31 @@ from modules.qualifications import parse_skills_list
 QUALIFICATION_CONCEPTS = [
     {
         "id": "skills",
-        "name": "Technical Skills",
-        "description": "Add, remove, or substitute required technical skills",
+        "name": "Skills",
+        "description": "Add, remove, or substitute technical skills",
         "type": "categorical_list",
         "options": ["Remove Core Skill", "Add Preferred Skill", "Minimal Skillset", "Mastery Skillset"]
     },
     {
         "id": "experience_years",
-        "name": "Years of Experience",
-        "description": "Adjust professional domain experience",
+        "name": "Experience",
+        "description": "Adjust professional experience years",
         "type": "numeric",
         "options": ["1.0", "2.0", "4.0", "6.0", "8.0", "12.0"]
     },
     {
         "id": "education",
-        "name": "Education / Degree Level",
-        "description": "Alter educational background or degree relevance",
+        "name": "Education",
+        "description": "Alter educational background or degree",
         "type": "categorical",
         "options": ["M.S. Software Engineering", "B.Tech Computer Science", "B.S. Information Systems", "Associate Degree", "Bootcamp Certificate"]
     },
     {
         "id": "certifications_count",
-        "name": "Professional Certifications",
-        "description": "Change number and level of domain certifications",
+        "name": "Certifications",
+        "description": "Change count of domain certifications",
         "type": "numeric",
         "options": ["0", "1", "2", "3", "4"]
-    },
-    {
-        "id": "interview_score",
-        "name": "Technical Interview Rating",
-        "description": "Modify technical assessment benchmark score",
-        "type": "numeric",
-        "options": ["60", "70", "80", "88", "95"]
     }
 ]
 
@@ -58,7 +51,7 @@ def make_qualification_variation(
     twin = copy.deepcopy(candidate)
     concept_lower = str(concept).strip().lower()
 
-    if concept_lower in ["skills", "technical_skills", "skill"]:
+    if concept_lower in ["skills", "technical_skills", "skill", "skills_and_experience"]:
         skills = parse_skills_list(candidate.get("skills", candidate.get("technical_skills", [])))
         t_val = str(target_value).strip()
 
@@ -111,6 +104,16 @@ def make_qualification_variation(
 
     return twin
 
+def make_multi_qualification_variation(
+    candidate: Dict[str, Any],
+    interventions: Dict[str, Any],
+    job_requirements: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    twin = copy.deepcopy(candidate)
+    for concept, target_val in interventions.items():
+        twin = make_qualification_variation(twin, concept, target_val, job_requirements)
+    return twin
+
 def generate_counterfactual_pair(
     candidate: Dict[str, Any],
     concept: str,
@@ -119,7 +122,7 @@ def generate_counterfactual_pair(
 ) -> Dict[str, Any]:
     twin = make_qualification_variation(candidate, concept, target_value, job_requirements)
     invariance_report = {}
-    ignored_keys = {"skills", "technical_skills", concept}
+    ignored_keys = {"skills", "technical_skills", "experience_years", "experience", "years_exp", concept}
     for k, v in candidate.items():
         if k not in ignored_keys:
             invariance_report[k] = (twin.get(k) == v)
