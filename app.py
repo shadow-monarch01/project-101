@@ -12,7 +12,7 @@ import json
 import re
 import pandas as pd
 from typing import Dict, List, Any, Optional, Union
-from fastapi import FastAPI, HTTPException, Query, Body, File, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Body, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,6 +77,12 @@ from modules.statistics import (
     mcnemar_test,
     multiclass_chi_square,
     paired_regression_test
+)
+from modules.resume_screener import (
+    extract_text_from_file_bytes,
+    parse_resume_full,
+    evaluate_ats_compatibility,
+    generate_grounded_resume_verdict
 )
 
 app = FastAPI(
@@ -967,60 +973,65 @@ def api_re_evaluate(req: ReEvaluateRequest):
 @app.post("/api/resume-screen")
 def api_resume_screen(req: ResumeScreenRequest):
     """
-    End-to-end Resume Screening:
-    Parses resume text or candidate profile, matches skills, calculates $Score_{qual}$, EFS, and Background Investigation.
+    End-to-end Resume Screening & ATS Audit:
+    Parses resume text or candidate profile, computes ATS compatibility score (0-100),
+    matches skills, evaluates $Score_{qual}$, extracts grounded strengths/weaknesses,
+    and runs SLM verdict with EFS faithfulness and background verification.
     """
-    job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"])
-    cand = dict(req.candidate_data or {})
+    job = req.job or JOB_STORE.get(req.job_id, DEFAULT_JOB_TEMPLATES.get(req.job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]))
+    text = req.resume_text or ""
 
-    # If raw resume text is provided, extract structured attributes
-    if req.resume_text and not cand.get("skills"):
-        text = req.resume_text
-        cand["name"] = cand.get("name") or "Applicant"
-        cand["role"] = cand.get("role") or job.get("title", "Engineer")
-        cand["education"] = cand.get("education") or ("B.Tech Computer Science" if "computer science" in text.lower() else "Bachelor Degree")
-        
-        years = re.search(r'(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years?|yrs?)', text, re.IGNORECASE)
-        cand["experience_years"] = float(years.group(1)) if years else float(cand.get("experience_years", 3.0))
-        
-        # Skill extraction
-        extracted_skills = []
-        for raw_s, canon in KNOWN_ALIASES.items():
-            if len(raw_s) >= 3 and re.search(rf'\b{re.escape(raw_s)}\b', text, re.IGNORECASE):
-                if canon not in extracted_skills:
-                    extracted_skills.append(canon)
-        cand["skills"] = extracted_skills if extracted_skills else ["Python", "SQL", "Git"]
-        cand["projects"] = "Resume Experience and Portfolio"
+    parsed_data = parse_resume_full(text)
+    
+    # Merge explicit manual overrides if supplied
+    if req.candidate_data:
+        cand_overrides = dict(req.candidate_data)
+        if cand_overrides.get("name"): parsed_data["name"] = cand_overrides["name"]
+        if cand_overrides.get("experience_years") is not None: 
+            try: parsed_data["experience_years"] = float(cand_overrides["experience_years"])
+            except Exception: pass
+        if cand_overrides.get("education"): parsed_data["education"] = cand_overrides["education"]
+        if cand_overrides.get("skills"):
+            if isinstance(cand_overrides["skills"], list):
+                parsed_data["skills"] = cand_overrides["skills"]
+            elif isinstance(cand_overrides["skills"], str):
+                parsed_data["skills"] = [s.strip() for s in cand_overrides["skills"].split(";") if s.strip()]
 
-    qual_res = compute_overall_qualification_score(cand, job)
-    ai_eval = evaluate_candidate(cand, job, mode=req.mode, model_name=req.model_name)
-    evidence_res = evaluate_evidence_traceability(ai_eval["explanation"], cand, job)
-
-    efs_res = evaluate_faithfulness_instance(
-        ai_eval["explanation"],
-        qual_res["qualification_score"],
-        ai_eval["decision"],
-        qual_res["skill_analysis"],
-        candidate_data=cand,
-        job_requirements=job
+    result = generate_grounded_resume_verdict(
+        resume_text=text,
+        parsed_data=parsed_data,
+        job_spec=job,
+        mode=req.mode or "Local Ollama Mode",
+        model_name=req.model_name
     )
+    return result
 
-    bi_res = run_background_investigation(
-        candidate=cand,
-        job=job,
-        evidence_traceability=evidence_res,
-        explanation=ai_eval["explanation"]
+@app.post("/api/resume-upload")
+async def api_resume_upload(
+    file: UploadFile = File(...),
+    job_id: Optional[str] = Form("JOB_SWE_01"),
+    mode: Optional[str] = Form("Local Ollama Mode"),
+    model_name: Optional[str] = Form("qwen3.5:4b")
+):
+    """
+    Uploads a PDF, DOCX, or TXT resume file, extracts text,
+    audits ATS compatibility, and generates grounded SLM hiring feedback.
+    """
+    content = await file.read()
+    raw_text = extract_text_from_file_bytes(content, file.filename)
+    job = JOB_STORE.get(job_id, DEFAULT_JOB_TEMPLATES.get(job_id, DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]))
+    parsed_data = parse_resume_full(raw_text)
+    
+    result = generate_grounded_resume_verdict(
+        resume_text=raw_text,
+        parsed_data=parsed_data,
+        job_spec=job,
+        mode=mode,
+        model_name=model_name
     )
-
-    return {
-        "candidate": cand,
-        "job_applied": job,
-        "qualification_analysis": qual_res,
-        "ai_evaluation": ai_eval,
-        "evidence": evidence_res,
-        "efs_assessment": efs_res,
-        "background_investigation": bi_res
-    }
+    result["raw_extracted_text"] = raw_text
+    result["filename"] = file.filename
+    return result
 
 @app.get("/api/report/{candidate_id}")
 def api_candidate_report(candidate_id: str, job_id: Optional[str] = "JOB_SWE_01"):
@@ -1131,4 +1142,4 @@ if __name__ == "__main__":
         webbrowser.open_new_tab("http://127.0.0.1:8000")
 
     threading.Thread(target=open_browser, daemon=True).start()
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)

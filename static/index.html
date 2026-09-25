@@ -75,8 +75,8 @@
             <button class="mobile-nav-btn tab-locked" data-tab="tab-candidates">02 Candidate Pool</button>
             <button class="mobile-nav-btn tab-locked" data-tab="tab-playground">03 Counterfactual Audit</button>
             <button class="mobile-nav-btn tab-locked" data-tab="tab-mitigation">04 Mitigation Loop</button>
-            <button class="mobile-nav-btn tab-locked" data-tab="tab-screener">05 Resume Screener</button>
-            <button class="mobile-nav-btn tab-locked" data-tab="tab-api-console">06 API Console</button>
+            <button class="mobile-nav-btn" data-tab="tab-screener">05 Resume Screener</button>
+            <button class="mobile-nav-btn" data-tab="tab-api-console">06 API Console</button>
         </nav>
     </aside>
 
@@ -108,11 +108,11 @@
             <span class="tab-index">04</span>
             <span>Mitigation Loop</span>
         </button>
-        <button class="nav-tab tab-locked" data-tab="tab-screener" data-tooltip="Run candidate audit to unlock">
+        <button class="nav-tab" data-tab="tab-screener">
             <span class="tab-index">05</span>
             <span>Resume Screener</span>
         </button>
-        <button class="nav-tab tab-locked" data-tab="tab-api-console" data-tooltip="Run candidate audit to unlock">
+        <button class="nav-tab" data-tab="tab-api-console">
             <span class="tab-index">06</span>
             <span>API Console</span>
         </button>
@@ -128,7 +128,7 @@
             <div id="audit-unlocked-banner" class="unlocked-banner" style="display: none;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <span><strong>Candidate Pool Audited:</strong> 5 evaluation and auditing tabs are now unlocked.</span>
+                    <span><strong>Candidate Pool Audited:</strong> Candidate Pool, Counterfactual, and Mitigation tabs are now unlocked.</span>
                 </div>
                 <button id="btn-goto-candidates-quick" class="btn btn-secondary btn-sm">Explore Candidate Pool →</button>
             </div>
@@ -619,22 +619,37 @@
                 <div class="card-header">
                     <div>
                         <h2 class="card-title">Mitigation Feedback Loop</h2>
-                        <p class="card-subtitle">Injects qualification-prioritization directives into model prompts to eliminate discrepancies and ensure consistent decisions.</p>
+                        <p class="card-subtitle">Injects affirmative qualification-prioritization directives into model prompts to eliminate hallucinated reasoning, enforce grounding, and ensure consistent decisions.</p>
                     </div>
                     <button id="btn-execute-mitigation" class="btn btn-primary" data-tooltip="Apply mitigation directives and re-evaluate audit candidates">
                         <svg class="icon" viewBox="0 0 24 24">
                             <path d="M23 4v6h-6"></path>
                             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                         </svg>
-                        <span id="mitigation-btn-text">Execute Mitigation</span>
+                        <span id="mitigation-btn-text">Execute Mitigation Loop</span>
                     </button>
                 </div>
 
+                <!-- Active In-Context Directive Preview -->
+                <div class="directive-pill-box">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                        <span style="font-weight: 700; color: var(--text-primary); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.03em;">
+                            <svg class="icon icon-sm text-cyan" viewBox="0 0 24 24" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            Active Mitigation Directive (Injected into SLM System Context)
+                        </span>
+                        <span class="badge badge-success">Grounded Rule Active</span>
+                    </div>
+                    <p style="margin: 0; font-family: var(--font-mono); font-size: 0.72rem; color: #94a3b8;">
+                        <em>"Evaluate candidates strictly and objectively using verified job qualifications, required technical skills match %, relevant domain experience, education, and portfolio benchmarks. Do not penalize non-traditional backgrounds if core qualifications are met. Base all reasoning and decisions solely on job-related technical merits."</em>
+                    </p>
+                </div>
+
+                <!-- Summary Metrics Grid -->
                 <div class="mitigation-summary-grid">
                     <div class="mit-card mit-before">
-                        <span class="mit-title">Before Mitigation</span>
+                        <span class="mit-title">Before Mitigation (Unconstrained)</span>
                         <div class="mit-val-row">
-                            <span>Mean Coverage:</span>
+                            <span>Mean Evidence Coverage:</span>
                             <strong id="mit-cov-before" class="highlight-amber">85.0%</strong>
                         </div>
                         <div class="mit-val-row">
@@ -642,7 +657,7 @@
                             <strong id="mit-efs-before">88.0 / 100</strong>
                         </div>
                         <div class="mit-val-row">
-                            <span>Flagged Inconsistencies:</span>
+                            <span>Flagged Discrepancies:</span>
                             <strong id="mit-flagged-before" class="highlight-red">2 Candidates</strong>
                         </div>
                     </div>
@@ -652,13 +667,13 @@
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                             <polyline points="12 5 19 12 12 19"></polyline>
                         </svg>
-                        <span class="badge badge-success">Active Directives</span>
+                        <span class="badge badge-success">Affirmative Directives</span>
                     </div>
 
                     <div class="mit-card mit-after">
-                        <span class="mit-title">After Mitigation</span>
+                        <span class="mit-title">After Mitigation (Grounded)</span>
                         <div class="mit-val-row">
-                            <span>Mean Coverage:</span>
+                            <span>Mean Evidence Coverage:</span>
                             <strong id="mit-cov-after" class="highlight-green">98.5%</strong>
                         </div>
                         <div class="mit-val-row">
@@ -666,28 +681,74 @@
                             <strong id="mit-efs-after" class="highlight-purple">98.5 / 100</strong>
                         </div>
                         <div class="mit-val-row">
-                            <span>Consistency Rate:</span>
+                            <span>Consistency Recovery:</span>
                             <strong id="mit-reduction-pct" class="highlight-green">100% Consistent</strong>
                         </div>
                     </div>
                 </div>
 
-                <h3 class="card-title mt-3">Candidate Audit Comparison Log</h3>
-                <div class="table-container mt-1">
+                <!-- Mitigation Execution Log Console -->
+                <div class="mitigation-console-card" id="mitigation-log-console">
+                    <div class="console-header">
+                        <div class="console-title">
+                            <span class="console-pulse-dot" id="console-status-dot"></span>
+                            <span>Mitigation Self-Correction & Reasoning Audit Stream</span>
+                        </div>
+                        <div class="console-actions">
+                            <button type="button" class="console-btn" id="btn-clear-mitigation-logs" title="Clear console stream">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                Clear
+                            </button>
+                            <button type="button" class="console-btn" id="btn-autoscroll-mitigation-logs" title="Toggle Auto-Scroll">
+                                <span id="autoscroll-label">Auto-Scroll: ON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="console-body" id="mitigation-log-stream">
+                        <div class="console-log-entry">
+                            <span class="log-time">[00:00:00]</span>
+                            <span class="log-badge log-badge-system">SYSTEM</span>
+                            <span class="log-message">Mitigation Engine online. Directive framework initialized.</span>
+                        </div>
+                        <div class="console-log-entry">
+                            <span class="log-time">[00:00:00]</span>
+                            <span class="log-badge log-badge-info">INFO</span>
+                            <span class="log-message">Click <strong>"Execute Mitigation Loop"</strong> above to run dual-pass grounding and re-evaluate candidates.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Candidate Audit Comparison Log Table -->
+                <div class="flex-between mt-4">
+                    <h3 class="card-title" style="margin-bottom: 0;">Candidate Audit Comparison Log</h3>
+                    <span class="text-muted" style="font-size: 0.72rem;">Side-by-side Before vs After Grounding</span>
+                </div>
+                <div class="table-container mt-2">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Name</th>
+                                <th>Candidate Name</th>
                                 <th>Qual Score</th>
-                                <th>Before Decision</th>
-                                <th>Before Background</th>
-                                <th>After Decision</th>
-                                <th>After Background</th>
-                                <th>Status</th>
+                                <th>Before Decision & EFS</th>
+                                <th>After Decision & EFS</th>
+                                <th>EFS Delta</th>
+                                <th>Background Audit</th>
+                                <th>Details</th>
                             </tr>
                         </thead>
-                        <tbody id="mitigation-results-tbody"></tbody>
+                        <tbody id="mitigation-results-tbody">
+                            <tr class="table-empty-state-row">
+                                <td colspan="8" class="table-empty-state">
+                                    <svg class="icon icon-lg" viewBox="0 0 24 24" style="width: 28px; height: 28px; display: block; margin: 0 auto 0.4rem auto; opacity: 0.4;">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    <span>No mitigation run executed yet. Click <strong>"Execute Mitigation Loop"</strong> to audit candidate records before & after grounding.</span>
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -698,95 +759,211 @@
             <div class="card">
                 <div class="card-header">
                     <div>
-                        <h2 class="card-title">Live Resume & Skill Gap Screener</h2>
-                        <p class="card-subtitle">Paste candidate profile text or click a quick-load preset to extract competencies, compute match ratios, and obtain an audited decision.</p>
+                        <h2 class="card-title">Live Resume & ATS Screener</h2>
+                        <p class="card-subtitle">Upload candidate resumes (PDF, DOCX, TXT) or paste profile text to audit ATS formatting compatibility, evaluate competency gaps, and receive grounded SLM verdicts with strengths & weaknesses.</p>
                     </div>
                 </div>
 
                 <div class="screener-grid">
+                    <!-- Left Column: Input & Controls -->
                     <div class="screener-input-col">
-                        <label for="screener-resume-text" class="control-label">Candidate Resume / Profile Text</label>
-                        <textarea id="screener-resume-text" class="textarea-input" rows="7" placeholder="Paste candidate profile or skills here..."></textarea>
-
-                        <!-- Quick-Load Presets -->
-                        <div class="sample-presets-row">
-                            <span class="text-muted" style="font-size: 0.7rem;">Presets:</span>
-                            <button type="button" class="sample-preset-btn" data-preset="senior">Senior Python Dev</button>
-                            <button type="button" class="sample-preset-btn" data-preset="mid">Full Stack Dev</button>
-                            <button type="button" class="sample-preset-btn" data-preset="junior">Junior QA Engineer</button>
+                        <!-- Target Role Selector -->
+                        <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
+                            <label for="screener-job-selector" class="control-label" style="font-weight: 700; color: var(--text-primary);">Target Job Role</label>
+                            <select id="screener-job-selector" class="select-input" style="width: 100%;">
+                                <option value="JOB_SWE_01">Senior Python Backend Engineer</option>
+                                <option value="JOB_FULLSTACK_02">Full Stack Web Developer</option>
+                                <option value="JOB_DEVOPS_03">Cloud DevOps & Platform Engineer</option>
+                                <option value="JOB_DATA_04">Data Scientist & Machine Learning Engineer</option>
+                            </select>
                         </div>
 
-                        <div class="screener-params-row">
-                            <div class="control-item" style="flex-direction: column; align-items: flex-start;">
-                                <label for="screener-exp-input" class="control-label">Experience (Years)</label>
-                                <input type="number" id="screener-exp-input" class="number-input" style="width: 100%;" value="5.0" step="0.5">
-                            </div>
-                            <div class="control-item" style="flex-direction: column; align-items: flex-start;">
-                                <label for="screener-edu-input" class="control-label">Education / Degree</label>
-                                <input type="text" id="screener-edu-input" class="text-input" style="width: 100%;" value="B.Tech Computer Science">
+                        <!-- Mode Switcher Tabs -->
+                        <div class="screener-mode-tabs">
+                            <button type="button" class="screener-tab-btn active" id="tab-btn-scr-upload">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24" style="vertical-align: -2px; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Upload Resume File
+                            </button>
+                            <button type="button" class="screener-tab-btn" id="tab-btn-scr-paste">
+                                <svg class="icon icon-sm" viewBox="0 0 24 24" style="vertical-align: -2px; margin-right: 4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                Paste Text & Presets
+                            </button>
+                        </div>
+
+                        <!-- Panel 1: File Upload Dropzone -->
+                        <div id="scr-panel-upload">
+                            <label for="screener-file-input" class="screener-dropzone" id="screener-dropzone-box" style="display: block;">
+                                <svg class="icon icon-lg text-muted mb-1" style="width: 32px; height: 32px;" viewBox="0 0 24 24">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                                    <line x1="9" y1="15" x2="12" y2="12"></line>
+                                    <line x1="15" y1="15" x2="12" y2="12"></line>
+                                </svg>
+                                <div style="font-weight: 600; font-size: 0.82rem; color: var(--text-primary);">Click or Drag & Drop Resume File</div>
+                                <div class="text-muted" style="font-size: 0.72rem; margin-top: 0.25rem;">Supports PDF, DOCX, TXT, Markdown (Max 15MB)</div>
+                                <input type="file" id="screener-file-input" accept=".pdf,.docx,.doc,.txt,.md" style="display: none;">
+                            </label>
+
+                            <!-- File Uploaded Info Card -->
+                            <div id="scr-file-selected-card" class="file-uploaded-badge" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.45rem;">
+                                    <svg class="icon icon-sm text-cyan" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                    <span id="scr-selected-filename" style="font-weight: 600; color: var(--text-primary);">resume.pdf</span>
+                                    <span id="scr-selected-filesize" class="text-muted" style="font-size: 0.68rem;">(120 KB)</span>
+                                </div>
+                                <button type="button" class="btn-icon" id="btn-remove-scr-file" title="Remove file" style="padding: 0.15rem;">
+                                    <svg class="icon icon-sm text-muted" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
                             </div>
                         </div>
+
+                        <!-- Panel 2: Paste Resume Text -->
+                        <div id="scr-panel-paste" style="display: none;">
+                            <label for="screener-resume-text" class="control-label">Candidate Resume / Profile Text</label>
+                            <textarea id="screener-resume-text" class="textarea-input" rows="7" placeholder="Paste full resume text or candidate bio here..."></textarea>
+
+                            <!-- Quick-Load Presets -->
+                            <div class="sample-presets-row">
+                                <span class="text-muted" style="font-size: 0.7rem;">Quick Presets:</span>
+                                <button type="button" class="sample-preset-btn" data-preset="senior">Senior Python Dev</button>
+                                <button type="button" class="sample-preset-btn" data-preset="mid">Full Stack Dev</button>
+                                <button type="button" class="sample-preset-btn" data-preset="data">ML Engineer</button>
+                                <button type="button" class="sample-preset-btn" data-preset="junior">Junior QA</button>
+                            </div>
+                        </div>
+
+                        <!-- Optional Overrides Accordion -->
+                        <details class="disclosure-card mt-2">
+                            <summary class="disclosure-summary" style="font-size: 0.72rem;">
+                                <span>Optional Candidate Metadata Overrides</span>
+                            </summary>
+                            <div class="screener-params-row mt-2">
+                                <div class="control-item" style="flex-direction: column; align-items: flex-start;">
+                                    <label for="screener-exp-input" class="control-label">Experience (Years)</label>
+                                    <input type="number" id="screener-exp-input" class="number-input" style="width: 100%;" placeholder="Auto-parsed" step="0.5">
+                                </div>
+                                <div class="control-item" style="flex-direction: column; align-items: flex-start;">
+                                    <label for="screener-edu-input" class="control-label">Degree / Education</label>
+                                    <input type="text" id="screener-edu-input" class="text-input" style="width: 100%;" placeholder="Auto-parsed">
+                                </div>
+                            </div>
+                        </details>
 
                         <button id="btn-screen-resume" class="btn btn-primary btn-block mt-3">
                             <svg class="icon" viewBox="0 0 24 24">
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
-                            <span id="screen-btn-text">Screen Profile & Audit Qualifications</span>
+                            <span id="screen-btn-text">Screen & Audit Resume Against Role</span>
                         </button>
                     </div>
 
+                    <!-- Right Column: Results & Grounded Assessment -->
                     <div class="screener-output-col">
                         <div id="screener-results-card" class="card screener-results" style="display: none; height: 100%; margin-bottom: 0;">
+                            <!-- Header & Contact Info -->
                             <div class="flex-between">
-                                <h3 class="card-title">Audited Recommendation</h3>
+                                <div>
+                                    <h3 class="card-title" id="scr-cand-name" style="margin-bottom: 0.15rem;">Candidate Assessment</h3>
+                                    <div id="scr-contact-badges" class="contact-badge-strip"></div>
+                                </div>
                                 <span id="scr-rec-badge" class="badge badge-success">STRONG_HIRE</span>
                             </div>
 
+                            <!-- 5-Metric Strip -->
                             <div class="screener-stats-row">
+                                <div class="stat-pill" data-tooltip="Overall ATS formatting and keyword density score">
+                                    <span class="stat-pill-lbl">ATS Score</span>
+                                    <span class="stat-pill-val highlight-green" id="scr-ats-score">88.5%</span>
+                                </div>
                                 <div class="stat-pill" data-tooltip="Overall qualification score based on job match">
                                     <span class="stat-pill-lbl">Qual Score</span>
-                                    <span class="stat-pill-val" id="scr-qual-score">92.0%</span>
+                                    <span class="stat-pill-val highlight-cyan" id="scr-qual-score">92.0%</span>
                                 </div>
-                                <div class="stat-pill" data-tooltip="Required skill match ratio">
+                                <div class="stat-pill" data-tooltip="Required core skill match percentage">
                                     <span class="stat-pill-lbl">Skill Match</span>
                                     <span class="stat-pill-val" id="scr-req-match">100.0%</span>
                                 </div>
-                                <div class="stat-pill" data-tooltip="Explanation Faithfulness Score">
+                                <div class="stat-pill" data-tooltip="Explanation Faithfulness Score (EFS 0-100)">
                                     <span class="stat-pill-lbl">Faithfulness</span>
-                                    <span class="stat-pill-val" id="scr-efs">96.0/100</span>
+                                    <span class="stat-pill-val highlight-purple" id="scr-efs">96.0/100</span>
                                 </div>
-                                <div class="stat-pill" data-tooltip="Background investigation check status">
+                                <div class="stat-pill" data-tooltip="Evidence-based credential audit check">
                                     <span class="stat-pill-lbl">Background</span>
                                     <span class="stat-pill-val" id="scr-bi">VERIFIED</span>
                                 </div>
                             </div>
 
-                            <div class="skill-breakdown-panel" style="margin-top: 0.5rem; padding: 0.65rem;">
+                            <!-- ATS Compatibility Checklist Card -->
+                            <div class="ats-breakdown-card">
+                                <div class="flex-between mb-1">
+                                    <span style="font-weight: 700; font-size: 0.72rem; color: var(--text-primary); text-transform: uppercase;">
+                                        <svg class="icon icon-sm text-cyan" viewBox="0 0 24 24" style="vertical-align: -2px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                        ATS Formatting & Quality Audit
+                                    </span>
+                                    <span id="scr-quant-ratio-badge" class="badge badge-secondary" style="font-size: 0.65rem;">0% Quantified Bullets</span>
+                                </div>
+                                <div id="scr-ats-checklist-container"></div>
+                            </div>
+
+                            <!-- Skill Competency Breakdown -->
+                            <div class="skill-breakdown-panel" style="margin-top: 0.65rem; padding: 0.65rem;">
                                 <div>
                                     <span class="col-title matched-title">Matched Required Skills</span>
                                     <div id="scr-matched-skills" class="skills-tag-cloud"></div>
                                 </div>
-                                <div style="margin-top: 0.35rem;">
+                                <div style="margin-top: 0.4rem;">
                                     <span class="col-title missing-title">Missing Required Skills</span>
                                     <div id="scr-missing-skills" class="skills-tag-cloud"></div>
                                 </div>
                             </div>
 
-                            <div class="explanation-box mt-2">
-                                <span class="exp-title">Grounded Rationale</span>
+                            <!-- Grounded Feedback: Strengths vs Gaps -->
+                            <div class="feedback-section-grid">
+                                <div class="feedback-card feedback-strengths">
+                                    <div class="feedback-title" style="color: #34d399;">
+                                        <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        Role Strengths
+                                    </div>
+                                    <ul class="feedback-list" id="scr-strengths-list"></ul>
+                                </div>
+                                <div class="feedback-card feedback-gaps">
+                                    <div class="feedback-title" style="color: #f87171;">
+                                        <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        Weaknesses & Competency Gaps
+                                    </div>
+                                    <ul class="feedback-list" id="scr-gaps-list"></ul>
+                                </div>
+                            </div>
+
+                            <!-- Actionable ATS Recommendations -->
+                            <div class="feedback-recs">
+                                <div class="feedback-title" style="color: #60a5fa;">
+                                    <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    ATS & Career Optimization Advice
+                                </div>
+                                <ul class="feedback-list" id="scr-recs-list"></ul>
+                            </div>
+
+                            <!-- SLM Grounded Verdict Explanation -->
+                            <div class="explanation-box mt-3">
+                                <span class="exp-title">Grounded SLM Hiring Verdict</span>
                                 <p id="scr-explanation-text" class="exp-text"></p>
                             </div>
                         </div>
 
                         <!-- Empty State for Screener -->
-                        <div id="screener-empty-state" class="card text-center" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem; margin-bottom: 0;">
-                            <svg class="icon icon-lg text-muted mb-2" style="width: 32px; height: 32px;" viewBox="0 0 24 24">
+                        <div id="screener-empty-state" class="card text-center" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; margin-bottom: 0;">
+                            <svg class="icon icon-lg text-muted mb-2" style="width: 36px; height: 36px; opacity: 0.5;" viewBox="0 0 24 24">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                 <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
-                            <h4 style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Awaiting Resume Input</h4>
-                            <p class="text-muted" style="font-size: 0.74rem; max-width: 260px; margin-top: 0.2rem;">Paste profile text or select a preset above to generate an audited assessment.</p>
+                            <h4 style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">Awaiting Resume Input</h4>
+                            <p class="text-muted" style="font-size: 0.74rem; max-width: 280px; margin-top: 0.25rem;">Upload a resume file (PDF, DOCX, TXT) or paste profile text on the left to generate an audited ATS and competency report.</p>
                         </div>
                     </div>
                 </div>
@@ -915,6 +1092,53 @@
                     <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     <span>Upload & Run Audit</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mitigation Before vs After Diff Modal -->
+    <div id="mitigation-diff-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 800px; width: 90%;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="diff-modal-cand-name" class="card-title">Candidate Mitigation Inspection</h3>
+                    <p id="diff-modal-cand-meta" class="card-subtitle">Comparing unconstrained baseline reasoning vs affirmative grounded reasoning</p>
+                </div>
+                <button id="diff-modal-close-btn" class="btn-icon" aria-label="Close Modal">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="diff-grid">
+                <div class="diff-column">
+                    <div class="diff-header">
+                        <span style="font-weight: 700; font-size: 0.76rem; color: var(--status-warning);">BEFORE MITIGATION (UNCONSTRAINED)</span>
+                        <span id="diff-before-dec-badge" class="badge badge-warning">INTERVIEW</span>
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        <span>Evidence Faithfulness (EFS): </span><strong id="diff-before-efs" class="highlight-amber">85.0%</strong>
+                    </div>
+                    <div class="diff-content-text" id="diff-before-explanation">Loading explanation...</div>
+                </div>
+
+                <div class="diff-column">
+                    <div class="diff-header">
+                        <span style="font-weight: 700; font-size: 0.76rem; color: var(--status-success);">AFTER GROUNDED MITIGATION</span>
+                        <span id="diff-after-dec-badge" class="badge badge-success">STRONG_HIRE</span>
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem;">
+                        <span>Evidence Faithfulness (EFS): </span><strong id="diff-after-efs" class="highlight-green">98.5%</strong>
+                    </div>
+                    <div class="diff-content-text" id="diff-after-explanation">Loading explanation...</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-canvas); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 0.72rem;">
+                <strong style="color: var(--accent-primary);">Grounding Verification: </strong>
+                <span id="diff-grounding-summary">Affirmative directive successfully anchored SLM decision to verified candidate competencies, eliminating ungrounded drift.</span>
             </div>
         </div>
     </div>
