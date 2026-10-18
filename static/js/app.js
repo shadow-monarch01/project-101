@@ -42,7 +42,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupFilterChips();
     setupDimensionToggles();
     setupResumeScreener();
-    setupCopyButton();
     setupInspectorDrawer();
     setupModal();
     setupDropzone();
@@ -52,7 +51,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await fetchJobs();
     await fetchDatasets();
     await loadCandidatePool();
-    initAPIConsole();
 });
 
 function initTheme() {
@@ -89,7 +87,7 @@ function setupTabNavigation() {
     const mobileTabs = document.querySelectorAll(".mobile-nav-btn");
 
     function activateTab(tabPaneId) {
-        const ALWAYS_OPEN_TABS = ["tab-analytics", "tab-screener", "tab-api-console"];
+        const ALWAYS_OPEN_TABS = ["tab-analytics", "tab-screener"];
         if (!state.tabsUnlocked && !ALWAYS_OPEN_TABS.includes(tabPaneId)) {
             // Pool-dependent tab is still locked until candidate audit
             return;
@@ -519,12 +517,6 @@ function setupEventListeners() {
     const screenBtn = document.getElementById("btn-screen-resume");
     if (screenBtn) screenBtn.addEventListener("click", runResumeScreening);
 
-    // API Console
-    const sendApiBtn = document.getElementById("btn-send-api-request");
-    if (sendApiBtn) sendApiBtn.addEventListener("click", executeAPIConsoleRequest);
-    const apiSel = document.getElementById("api-endpoint-selector");
-    if (apiSel) apiSel.addEventListener("change", updateAPIConsolePayload);
-
     // Table Event Delegation
     setupCandidateTableEventDelegation();
 }
@@ -800,23 +792,6 @@ function setupResumeScreener() {
             runResumeScreening();
         });
     });
-}
-
-function setupCopyButton() {
-    const copyBtn = document.getElementById("btn-copy-api-res");
-    if (copyBtn) {
-        copyBtn.addEventListener("click", () => {
-            const text = document.getElementById("api-response-body").innerText;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text);
-                const originalHtml = copyBtn.innerHTML;
-                copyBtn.innerHTML = `<span>Copied</span>`;
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalHtml;
-                }, 1500);
-            }
-        });
-    }
 }
 
 // ============================================================================
@@ -2104,170 +2079,6 @@ function renderResumeScreeningResults(data) {
     const explEl = document.getElementById("scr-explanation-text");
     if (explEl) {
         explEl.innerText = aiEval.explanation || "Candidate evaluated with grounded SLM feedback loop.";
-    }
-}
-
-// ============================================================================
-// Interactive REST API Testing Console
-// ============================================================================
-const API_SAMPLE_PAYLOADS = {
-    "/api/evaluate": JSON.stringify({
-        candidate: {
-            candidate_id: "API_TEST_01",
-            name: "Alexander Wright",
-            skills: "Python; SQL; REST API; Git; Docker; PostgreSQL",
-            experience_years: 5.0,
-            education: "B.Tech Computer Science",
-            certifications: "AWS Solutions Architect",
-            projects: "Distributed microservices backend"
-        },
-        job: {
-            title: "Senior Python Backend Engineer",
-            required_skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
-            preferred_skills: ["FastAPI", "Docker"],
-            minimum_experience: 4.0
-        },
-        decision_type: "multiclass",
-        mode: "Local Ollama Mode"
-    }, null, 2),
-
-    "/api/background-investigation": JSON.stringify({
-        candidate: {
-            candidate_id: "BI_TEST_01",
-            name: "Priya Sharma",
-            skills: "Python, SQL, PostgreSQL, REST API, Git",
-            experience_years: 6.0,
-            education: "B.Tech Computer Science",
-            certifications: "AWS Solutions Architect",
-            projects: "Distributed microservices system"
-        },
-        job: {
-            title: "Senior Python Backend Engineer",
-            required_skills: ["Python", "SQL", "PostgreSQL", "Git"],
-            minimum_experience: 4.0
-        }
-    }, null, 2),
-
-    "/api/evidence": JSON.stringify({
-        candidate_id: "SWE_001",
-        job_id: "JOB_SWE_01",
-        explanation: "Candidate has 6 years experience with strong Python and PostgreSQL skills, but lacks Kubernetes."
-    }, null, 2),
-
-    "/api/skill-analysis": JSON.stringify({
-        candidate_skills: ["postgres", "python 3", "git", "fast api"],
-        required_skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
-        preferred_skills: ["FastAPI", "Docker"]
-    }, null, 2),
-
-    "/api/qualification-score": JSON.stringify({
-        candidate: {
-            skills: "Python; SQL; REST API; Git; PostgreSQL",
-            experience_years: 4.0,
-            education: "B.Tech Computer Science",
-            certifications_count: 1,
-            projects: "Distributed systems and API microservices"
-        },
-        job: {
-            minimum_experience: 3.0,
-            required_skills: ["Python", "SQL", "Git", "PostgreSQL"]
-        }
-    }, null, 2),
-
-    "/api/efs": JSON.stringify({
-        explanation: "Candidate demonstrated strong competency in Python microservices with verified 6 years background.",
-        qualification_score: 88.5,
-        decision: "STRONG_HIRE"
-    }, null, 2),
-
-    "/api/counterfactual": JSON.stringify({
-        candidate: {
-            candidate_id: "SWE_001",
-            name: "Priya Sharma",
-            skills: "Python; SQL; REST API; Git; FastAPI",
-            experience_years: 6.0
-        },
-        concept: "skills",
-        target_value: "Remove Core Skill",
-        mode: "Local Ollama Mode"
-    }, null, 2),
-
-    "/api/decision-consistency": JSON.stringify({
-        candidate_a: { candidate_id: "A", name: "Candidate A", qualification_score: 90.0 },
-        candidate_b: { candidate_id: "B", name: "Candidate B", qualification_score: 60.0 },
-        eval_a: { decision: "HIRE", qualification_score: 90.0 },
-        eval_b: { decision: "REJECT", qualification_score: 60.0 }
-    }, null, 2),
-
-    "/api/statistics": JSON.stringify({
-        test_type: "mcnemar",
-        original_values: ["SELECT", "SELECT", "REJECT", "REJECT"],
-        modified_values: ["SELECT", "REJECT", "REJECT", "REJECT"]
-    }, null, 2),
-
-    "/api/re-evaluate": JSON.stringify({
-        candidate: {
-            candidate_id: "SWE_002",
-            name: "Marcus Vance",
-            skills: ["Python", "SQL", "REST API", "Git", "PostgreSQL"],
-            experience_years: 5.0
-        },
-        mitigation_instruction: "Evaluate strictly based on objective job qualifications and technical competencies."
-    }, null, 2),
-
-    "/api/resume-screen": JSON.stringify({
-        resume_text: "Senior Software Engineer with 5 years experience in Python, FastAPI, SQL, Docker, and Microservices. B.Tech in Computer Science.",
-        job_id: "JOB_SWE_01"
-    }, null, 2),
-
-    "/api/cluster": "{}",
-    "/api/health": "{}",
-    "/api/jobs": "{}",
-    "/api/datasets": "{}"
-};
-
-function initAPIConsole() {
-    updateAPIConsolePayload();
-}
-
-function updateAPIConsolePayload() {
-    const endpoint = document.getElementById("api-endpoint-selector").value;
-    const editor = document.getElementById("api-request-body");
-    if (editor) {
-        editor.value = API_SAMPLE_PAYLOADS[endpoint] || "{}";
-    }
-}
-
-async function executeAPIConsoleRequest() {
-    const endpoint = document.getElementById("api-endpoint-selector").value;
-    const bodyText = document.getElementById("api-request-body").value;
-    const statusPill = document.getElementById("api-status-code");
-    const viewer = document.getElementById("api-response-body");
-
-    statusPill.innerText = "Sending...";
-    statusPill.className = "badge badge-info";
-
-    try {
-        let options = { headers: { "Content-Type": "application/json" } };
-        if (endpoint === "/api/health" || endpoint === "/api/jobs" || endpoint === "/api/datasets") {
-            options.method = "GET";
-        } else {
-            options.method = "POST";
-            if (endpoint !== "/api/cluster") {
-                options.body = bodyText;
-            }
-        }
-
-        const res = await fetch(endpoint, options);
-        const data = await res.json();
-
-        statusPill.innerText = `${res.status} ${res.statusText || "OK"}`;
-        statusPill.className = res.status === 200 ? "badge badge-success" : "badge badge-danger";
-        viewer.innerText = JSON.stringify(data, null, 2);
-    } catch (e) {
-        statusPill.innerText = "Network Error";
-        statusPill.className = "badge badge-danger";
-        viewer.innerText = String(e);
     }
 }
 

@@ -1732,15 +1732,15 @@ body {
     color: var(--text-muted);
 }
 
-/* Screener & API Console Grids */
-.screener-grid, .api-console-grid {
+/* Screener Grid */
+.screener-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
 }
 
 @media (max-width: 860px) {
-    .screener-grid, .api-console-grid {
+    .screener-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -1945,36 +1945,6 @@ body {
     flex-wrap: wrap;
     align-items: center;
     margin-top: 0.3rem;
-}
-
-/* JSON Code Editor & Viewer */
-.json-editor, .json-viewer {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-    background: var(--bg-canvas);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 0.65rem;
-    font-family: var(--font-mono);
-    font-size: 0.76rem;
-    line-height: 1.45;
-    outline: none;
-    transition: border-color 0.15s ease;
-    word-break: break-word;
-}
-
-.json-editor:focus {
-    border-color: var(--border-strong);
-}
-
-.json-viewer {
-    min-height: 320px;
-    max-height: 440px;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
 }
 
 /* Cluster Badges */

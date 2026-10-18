@@ -76,7 +76,6 @@
             <button class="mobile-nav-btn tab-locked" data-tab="tab-playground">03 Counterfactual Audit</button>
             <button class="mobile-nav-btn tab-locked" data-tab="tab-mitigation">04 Mitigation Loop</button>
             <button class="mobile-nav-btn" data-tab="tab-screener">05 Resume Screener</button>
-            <button class="mobile-nav-btn" data-tab="tab-api-console">06 API Console</button>
         </nav>
     </aside>
 
@@ -111,10 +110,6 @@
         <button class="nav-tab" data-tab="tab-screener">
             <span class="tab-index">05</span>
             <span>Resume Screener</span>
-        </button>
-        <button class="nav-tab" data-tab="tab-api-console">
-            <span class="tab-index">06</span>
-            <span>API Console</span>
         </button>
     </nav>
 
@@ -965,73 +960,6 @@
                             <h4 style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">Awaiting Resume Input</h4>
                             <p class="text-muted" style="font-size: 0.74rem; max-width: 280px; margin-top: 0.25rem;">Upload a resume file (PDF, DOCX, TXT) or paste profile text on the left to generate an audited ATS and competency report.</p>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 6: Interactive API Testing Console -->
-        <section id="tab-api-console" class="tab-pane">
-            <div class="card">
-                <div class="card-header">
-                    <div>
-                        <h2 class="card-title">Interactive API Testing Console</h2>
-                        <p class="card-subtitle">Test backend RESTful endpoints live with structured JSON request and response payloads.</p>
-                    </div>
-                </div>
-
-                <div class="api-console-grid">
-                    <div class="api-request-col">
-                        <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
-                            <label for="api-endpoint-selector" class="control-label">API Endpoint</label>
-                            <select id="api-endpoint-selector" class="select-input" style="width: 100%;">
-                                <option value="/api/evaluate">POST /api/evaluate (Candidate Assessment)</option>
-                                <option value="/api/background-investigation">POST /api/background-investigation (Background Investigation)</option>
-                                <option value="/api/evidence">POST /api/evidence (Evidence Traceability & Claims)</option>
-                                <option value="/api/skill-analysis">POST /api/skill-analysis (Skill Gap Analysis)</option>
-                                <option value="/api/qualification-score">POST /api/qualification-score (Score Breakdown)</option>
-                                <option value="/api/efs">POST /api/efs (Calculate EFS Faithfulness)</option>
-                                <option value="/api/counterfactual">POST /api/counterfactual (Qualification Variation)</option>
-                                <option value="/api/decision-consistency">POST /api/decision-consistency (Pairwise Check)</option>
-                                <option value="/api/statistics">POST /api/statistics (Hypothesis Testing)</option>
-                                <option value="/api/re-evaluate">POST /api/re-evaluate (Debiased Re-Evaluation)</option>
-                                <option value="/api/resume-screen">POST /api/resume-screen (Resume Screening)</option>
-                                <option value="/api/cluster">POST /api/cluster (TF-IDF + K-Means)</option>
-                                <option value="/api/health">GET /api/health (System Health Status)</option>
-                                <option value="/api/jobs">GET /api/jobs (List Job Roles)</option>
-                                <option value="/api/datasets">GET /api/datasets (List Benchmark Datasets)</option>
-                            </select>
-                        </div>
-
-                        <div class="control-item mb-2" style="flex-direction: column; align-items: flex-start;">
-                            <label for="api-request-body" class="control-label">JSON Request Body</label>
-                            <textarea id="api-request-body" class="json-editor" rows="12" spellcheck="false"></textarea>
-                        </div>
-
-                        <button id="btn-send-api-request" class="btn btn-primary btn-block">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                            <span>Send Request</span>
-                        </button>
-                    </div>
-
-                    <div class="api-response-col">
-                        <div class="flex-between mb-2">
-                            <label class="control-label">JSON Response</label>
-                            <div class="action-btn-group">
-                                <span id="api-status-code" class="badge badge-secondary">Ready</span>
-                                <button id="btn-copy-api-res" class="btn btn-outline btn-sm" data-tooltip="Copy response to clipboard" data-tooltip-pos="left">
-                                    <svg class="icon icon-sm" viewBox="0 0 24 24">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                    <span>Copy</span>
-                                </button>
-                            </div>
-                        </div>
-                        <pre id="api-response-body" class="json-viewer">Click "Send Request" to execute endpoint.</pre>
                     </div>
                 </div>
             </div>
