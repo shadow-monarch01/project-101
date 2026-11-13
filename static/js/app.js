@@ -655,6 +655,7 @@ function renderActiveTargetBoxes() {
             chip.addEventListener("click", () => {
                 state.activeInterventions[dimKey] = opt.val;
                 renderActiveTargetBoxes();
+                updateTwinPreview();
             });
             optionsGrid.appendChild(chip);
         });
@@ -682,10 +683,12 @@ function setupDimensionToggles() {
                 }
             }
             renderActiveTargetBoxes();
+            updateTwinPreview();
         });
     });
 
     renderActiveTargetBoxes();
+    updateTwinPreview();
 }
 
 function setupResumeScreener() {
@@ -1424,11 +1427,104 @@ function populatePlaygroundCandidateSelector(candidates) {
         const cand = state.candidatePool.find(c => c.candidate_id === e.target.value);
         if (cand) populatePlaygroundWithCandidate(cand);
     });
+
+    if (candidates && candidates.length > 0) {
+        populatePlaygroundWithCandidate(candidates[0]);
+    }
+}
+
+function updateTwinPreview(candOverride) {
+    const candSel = document.getElementById("cf-candidate-selector");
+    const candId = candSel ? candSel.value : null;
+    const cand = candOverride || (state.candidatePool && state.candidatePool.find(c => c.candidate_id === candId)) || state.selectedCandidate;
+    if (!cand) return;
+
+    let skills = cand.skills || cand.technical_skills || (cand.matched_skills ? cand.matched_skills.join(", ") : "Python, SQL");
+    let exp = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : (cand.years_exp != null ? cand.years_exp : 0));
+    let edu = cand.education || cand.degree || "B.Tech Computer Science";
+    let certs = cand.certifications_count != null ? `${cand.certifications_count} Certs` : (Array.isArray(cand.certifications) ? `${cand.certifications.length} Certs` : (cand.certifications ? String(cand.certifications) : "0 Certs"));
+
+    const activeDims = state.activeDimensions || [];
+    const conceptBadges = [];
+
+    const twinSkillsEl = document.getElementById("cf-twin-skills");
+    const twinExpEl = document.getElementById("cf-twin-exp");
+    const twinEduEl = document.getElementById("cf-twin-edu");
+    const twinCertsEl = document.getElementById("cf-twin-certs");
+
+    if (twinSkillsEl) twinSkillsEl.className = "info-val";
+    if (twinExpEl) twinExpEl.className = "info-val";
+    if (twinEduEl) twinEduEl.className = "info-val";
+    if (twinCertsEl) twinCertsEl.className = "info-val";
+
+    if (activeDims.includes("skills")) {
+        const targetVal = state.activeInterventions["skills"] || "Remove Core Skill";
+        conceptBadges.push(`Skills: ${targetVal}`);
+        let skillList = skills.split(/[,;]\s*/).map(s => s.trim()).filter(Boolean);
+        if (targetVal === "Remove Core Skill") {
+            if (skillList.length > 0) skillList = skillList.slice(1);
+        } else if (targetVal === "Add Preferred Skill") {
+            const prefs = ["FastAPI", "Docker", "Kubernetes", "GraphQL", "AWS", "Machine Learning"];
+            for (const p of prefs) {
+                if (!skillList.some(s => s.toLowerCase() === p.toLowerCase())) {
+                    skillList.push(p);
+                    break;
+                }
+            }
+        } else if (targetVal === "Minimal Skillset") {
+            skillList = skillList.slice(0, 1);
+        } else if (targetVal === "Mastery Skillset") {
+            const extra = ["Python", "SQL", "Docker", "Kubernetes", "PostgreSQL", "FastAPI", "CI/CD"];
+            extra.forEach(e => {
+                if (!skillList.some(s => s.toLowerCase() === e.toLowerCase())) skillList.push(e);
+            });
+        }
+        skills = skillList.join("; ");
+        if (twinSkillsEl) twinSkillsEl.className = "info-val highlight-amber";
+    }
+
+    if (activeDims.includes("experience_years")) {
+        const targetExp = state.activeInterventions["experience_years"] || "2.0";
+        conceptBadges.push(`Experience: ${targetExp}y`);
+        exp = targetExp;
+        if (twinExpEl) twinExpEl.className = "info-val highlight-amber";
+    }
+
+    if (activeDims.includes("education")) {
+        const targetEdu = state.activeInterventions["education"] || "M.S. Software Engineering";
+        conceptBadges.push(`Education: ${targetEdu}`);
+        edu = targetEdu;
+        if (twinEduEl) twinEduEl.className = "info-val highlight-amber";
+    }
+
+    if (activeDims.includes("certifications_count")) {
+        const targetCerts = state.activeInterventions["certifications_count"] || "2";
+        conceptBadges.push(`Certs: ${targetCerts}`);
+        certs = `${targetCerts} Certs`;
+        if (twinCertsEl) twinCertsEl.className = "info-val highlight-amber";
+    }
+
+    const conceptEl = document.getElementById("cf-twin-concept");
+    if (conceptEl) {
+        conceptEl.innerText = conceptBadges.length > 0 ? conceptBadges.join(" | ") : "None (Select Dimension)";
+    }
+
+    if (twinSkillsEl) twinSkillsEl.innerText = skills || "—";
+    if (twinExpEl) twinExpEl.innerText = `${exp} Years`;
+    if (twinEduEl) twinEduEl.innerText = edu;
+    if (twinCertsEl) twinCertsEl.innerText = certs;
+
+    const twinExplEl = document.getElementById("cf-twin-expl");
+    if (twinExplEl && (!twinExplEl.innerText || twinExplEl.innerText.startsWith("Awaiting") || twinExplEl.innerText.startsWith("Intervention"))) {
+        twinExplEl.innerText = "Intervention preview active. Click Execute Test to generate AI causal reasoning.";
+    }
 }
 
 function populatePlaygroundWithCandidate(cand) {
-    const exp = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : 0);
-    const skills = cand.skills || (cand.matched_skills ? cand.matched_skills.join(", ") : "Python, SQL");
+    const exp = cand.experience_years != null ? cand.experience_years : (cand.experience != null ? cand.experience : (cand.years_exp != null ? cand.years_exp : 0));
+    const skills = cand.skills || cand.technical_skills || (cand.matched_skills ? cand.matched_skills.join(", ") : "Python, SQL");
+    const edu = cand.education || cand.degree || "B.Tech Computer Science";
+    const certs = cand.certifications_count != null ? `${cand.certifications_count} Certs` : (Array.isArray(cand.certifications) ? `${cand.certifications.length} Certs` : (cand.certifications ? String(cand.certifications) : "0 Certs"));
     const qual = cand.qualification_score != null ? cand.qualification_score : 85;
     const dec = cand.expected_decision || "STRONG_HIRE";
 
@@ -1437,15 +1533,15 @@ function populatePlaygroundWithCandidate(cand) {
     document.getElementById("cf-orig-name").innerText = cand.name || "Candidate";
     document.getElementById("cf-orig-skills").innerText = skills;
     document.getElementById("cf-orig-exp").innerText = `${exp} Years`;
+    const origEduEl = document.getElementById("cf-orig-edu");
+    if (origEduEl) origEduEl.innerText = edu;
+    const origCertsEl = document.getElementById("cf-orig-certs");
+    if (origCertsEl) origCertsEl.innerText = certs;
     document.getElementById("cf-orig-qual").innerText = `${qual}%`;
     document.getElementById("cf-orig-dec").innerText = dec;
     document.getElementById("cf-orig-expl").innerText = cand.explanation || "Select a perturbation concept and click Execute Test.";
 
-    document.getElementById("cf-twin-skills").innerText = skills;
-    document.getElementById("cf-twin-exp").innerText = `${exp} Years`;
-    document.getElementById("cf-twin-qual").innerText = `${qual}%`;
-    document.getElementById("cf-twin-dec").innerText = dec;
-    document.getElementById("cf-twin-expl").innerText = "Awaiting counterfactual evaluation...";
+    updateTwinPreview(cand);
 }
 
 async function runCounterfactualEvaluation() {
@@ -1500,18 +1596,51 @@ async function runCounterfactualEvaluation() {
         });
         const data = await res.json();
 
+        const origCand = data.original_profile.candidate || {};
+        const twinCand = data.counterfactual_profile.candidate || {};
+
         // Populate Baseline
-        document.getElementById("cf-orig-name").innerText = (data.original_profile.candidate && data.original_profile.candidate.name) || "Candidate";
-        document.getElementById("cf-orig-skills").innerText = (data.original_profile.candidate && data.original_profile.candidate.skills) || "—";
-        document.getElementById("cf-orig-exp").innerText = `${data.original_profile.candidate && (data.original_profile.candidate.experience_years != null ? data.original_profile.candidate.experience_years : (data.original_profile.candidate.experience || 0))} Years`;
+        document.getElementById("cf-orig-name").innerText = origCand.name || "Candidate";
+        document.getElementById("cf-orig-skills").innerText = origCand.skills || origCand.technical_skills || "—";
+        document.getElementById("cf-orig-exp").innerText = `${origCand.experience_years != null ? origCand.experience_years : (origCand.experience != null ? origCand.experience : origCand.years_exp || 0)} Years`;
+        if (document.getElementById("cf-orig-edu")) {
+            document.getElementById("cf-orig-edu").innerText = origCand.education || origCand.degree || "—";
+        }
+        if (document.getElementById("cf-orig-certs")) {
+            const origCerts = origCand.certifications_count != null ? origCand.certifications_count : (Array.isArray(origCand.certifications) ? origCand.certifications.length : 0);
+            document.getElementById("cf-orig-certs").innerText = `${origCerts} Certs`;
+        }
         document.getElementById("cf-orig-qual").innerText = `${data.original_profile.qualification_score}%`;
         document.getElementById("cf-orig-dec").innerText = data.original_profile.decision;
         document.getElementById("cf-orig-expl").innerText = data.original_profile.explanation;
 
         // Populate Twin
         document.getElementById("cf-twin-concept").innerText = `${data.perturbation_concept} (${data.target_value})`;
-        document.getElementById("cf-twin-skills").innerText = (data.counterfactual_profile.candidate && data.counterfactual_profile.candidate.skills) || "—";
-        document.getElementById("cf-twin-exp").innerText = `${data.counterfactual_profile.candidate && (data.counterfactual_profile.candidate.experience_years != null ? data.counterfactual_profile.candidate.experience_years : (data.counterfactual_profile.candidate.experience || 0))} Years`;
+        
+        const twinSkillsEl = document.getElementById("cf-twin-skills");
+        const twinExpEl = document.getElementById("cf-twin-exp");
+        const twinEduEl = document.getElementById("cf-twin-edu");
+        const twinCertsEl = document.getElementById("cf-twin-certs");
+
+        if (twinSkillsEl) {
+            twinSkillsEl.innerText = twinCand.skills || twinCand.technical_skills || "—";
+            twinSkillsEl.className = state.activeDimensions.includes("skills") ? "info-val highlight-amber" : "info-val";
+        }
+        if (twinExpEl) {
+            const expVal = twinCand.experience_years != null ? twinCand.experience_years : (twinCand.experience != null ? twinCand.experience : twinCand.years_exp || 0);
+            twinExpEl.innerText = `${expVal} Years`;
+            twinExpEl.className = state.activeDimensions.includes("experience_years") ? "info-val highlight-amber" : "info-val";
+        }
+        if (twinEduEl) {
+            twinEduEl.innerText = twinCand.education || twinCand.degree || "—";
+            twinEduEl.className = state.activeDimensions.includes("education") ? "info-val highlight-amber" : "info-val";
+        }
+        if (twinCertsEl) {
+            const twinCerts = twinCand.certifications_count != null ? twinCand.certifications_count : (Array.isArray(twinCand.certifications) ? twinCand.certifications.length : 0);
+            twinCertsEl.innerText = `${twinCerts} Certs`;
+            twinCertsEl.className = state.activeDimensions.includes("certifications_count") ? "info-val highlight-amber" : "info-val";
+        }
+
         document.getElementById("cf-twin-qual").innerText = `${data.counterfactual_profile.qualification_score}%`;
         document.getElementById("cf-twin-dec").innerText = data.counterfactual_profile.decision;
         document.getElementById("cf-twin-expl").innerText = data.counterfactual_profile.explanation;

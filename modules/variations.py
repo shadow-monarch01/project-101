@@ -76,9 +76,15 @@ def make_qualification_variation(
 
     elif concept_lower in ["experience_years", "experience", "years_exp"]:
         try:
-            twin["experience_years"] = float(target_value)
+            val = float(target_value)
         except (ValueError, TypeError):
-            twin["experience_years"] = candidate.get("experience_years", 3.0)
+            try:
+                val = float(candidate.get("experience_years", candidate.get("experience", candidate.get("years_exp", 3.0))))
+            except (ValueError, TypeError):
+                val = 3.0
+        twin["experience_years"] = val
+        twin["experience"] = val
+        twin["years_exp"] = val
 
     elif concept_lower in ["education", "degree", "education_level"]:
         twin["education"] = str(target_value)
@@ -87,17 +93,21 @@ def make_qualification_variation(
     elif concept_lower in ["certifications", "certifications_count", "certs"]:
         try:
             val = int(target_value)
-            twin["certifications_count"] = val
-            twin["certifications"] = [f"Cert #{i+1}" for i in range(val)] if val > 0 else []
         except (ValueError, TypeError):
-            twin["certifications_count"] = 0
-            twin["certifications"] = []
+            val = 0
+        twin["certifications_count"] = val
+        twin["certifications"] = [f"Cert #{i+1}" for i in range(val)] if val > 0 else []
 
     elif concept_lower in ["interview_score", "score", "coding_score"]:
         try:
-            twin["interview_score"] = float(target_value)
+            val = float(target_value)
         except (ValueError, TypeError):
-            twin["interview_score"] = candidate.get("interview_score", 75.0)
+            try:
+                val = float(candidate.get("interview_score", candidate.get("coding_score", 75.0)))
+            except (ValueError, TypeError):
+                val = 75.0
+        twin["interview_score"] = val
+        twin["coding_score"] = val
 
     else:
         twin[concept] = target_value
@@ -122,7 +132,11 @@ def generate_counterfactual_pair(
 ) -> Dict[str, Any]:
     twin = make_qualification_variation(candidate, concept, target_value, job_requirements)
     invariance_report = {}
-    ignored_keys = {"skills", "technical_skills", "experience_years", "experience", "years_exp", concept}
+    ignored_keys = {
+        "skills", "technical_skills", "experience_years", "experience", "years_exp",
+        "education", "degree", "certifications", "certifications_count", "certs",
+        "interview_score", "coding_score", concept
+    }
     for k, v in candidate.items():
         if k not in ignored_keys:
             invariance_report[k] = (twin.get(k) == v)

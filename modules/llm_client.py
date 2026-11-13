@@ -148,9 +148,27 @@ def _grounded_qualification_inference(
         if decision in ["STRONG_HIRE", "HIRE"]:
             expl = f"Strong alignment with role requirements. Demonstrated competence in {', '.join(matched[:3])} with {exp_years} years domain background."
         elif decision == "INTERVIEW":
-            expl = f"Candidate meets baseline requirements ({exp_years}y experience) but shows minor gaps in {', '.join(missing[:2]) if missing else 'specialized areas'}. Recommend technical interview."
+            reasons = []
+            if missing:
+                reasons.append(f"minor skill gaps in {', '.join(missing[:2])}")
+            if exp_years < float(job.get('minimum_experience', 2.0) or 2.0):
+                reasons.append(f"experience ({exp_years}y) slightly below target ({job.get('minimum_experience', 2.0)}y)")
+            cand_edu = str(candidate.get('education', candidate.get('degree', '')))
+            if res['component_breakdown']['education_score'] < 70:
+                reasons.append(f"alternative education ({cand_edu})")
+            gap_str = "; ".join(reasons) if reasons else "specialized requirements"
+            expl = f"Candidate meets baseline qualifications ({exp_years}y exp, {len(matched)} skills) but has {gap_str}. Recommend technical interview."
         else:
-            expl = f"Profile does not meet core qualification threshold ({qual_score}/100). Lacks essential skills in {', '.join(missing[:2]) if missing else 'required stack'}."
+            reasons = []
+            if exp_years < float(job.get('minimum_experience', 2.0) or 2.0):
+                reasons.append(f"insufficient experience ({exp_years}y vs minimum {job.get('minimum_experience', 2.0)}y required)")
+            if missing:
+                reasons.append(f"missing critical skills in {', '.join(missing[:2])}")
+            cand_edu = str(candidate.get('education', candidate.get('degree', '')))
+            if res['component_breakdown']['education_score'] < 60:
+                reasons.append(f"education level ({cand_edu}) below baseline threshold")
+            gap_str = "; ".join(reasons) if reasons else f"overall score of {qual_score}/100"
+            expl = f"Profile does not meet core qualification threshold ({qual_score}/100) due to {gap_str}."
 
     return {
         "decision": decision,

@@ -1,3 +1,4 @@
+import copy
 """
 AI Hiring Intelligence System - FastAPI REST API Gateway
 Exposes qualification-based candidate assessment, skill gap analysis, Evidence Traceability,
@@ -594,15 +595,31 @@ def api_counterfactual(req: CounterfactualRequest):
         explanation=twin_eval["explanation"]
     )
 
+    # Standardize candidate profiles for consistent attribute rendering
+    orig_cand = copy.deepcopy(req.candidate)
+    twin_cand = copy.deepcopy(twin)
+    for c_dict in (orig_cand, twin_cand):
+        if not c_dict.get("skills") and c_dict.get("technical_skills"):
+            c_dict["skills"] = c_dict["technical_skills"]
+        elif not c_dict.get("technical_skills") and c_dict.get("skills"):
+            c_dict["technical_skills"] = c_dict["skills"]
+        if c_dict.get("experience_years") is None:
+            c_dict["experience_years"] = c_dict.get("experience", c_dict.get("years_exp", 0.0))
+        if not c_dict.get("education"):
+            c_dict["education"] = c_dict.get("degree", "B.Tech Computer Science")
+        if c_dict.get("certifications_count") is None:
+            c_val = c_dict.get("certifications", 0)
+            c_dict["certifications_count"] = len(c_val) if isinstance(c_val, list) else (int(c_val) if str(c_val).isdigit() else 0)
+
     return {
         "original_profile": {
-            "candidate": req.candidate,
+            "candidate": orig_cand,
             "qualification_score": orig_qual["qualification_score"],
             "decision": orig_eval["decision"],
             "explanation": orig_eval["explanation"]
         },
         "counterfactual_profile": {
-            "candidate": twin,
+            "candidate": twin_cand,
             "qualification_score": twin_qual["qualification_score"],
             "decision": twin_eval["decision"],
             "explanation": twin_eval["explanation"],
