@@ -121,3 +121,41 @@ def test_api_resume_screen():
     assert "efs_assessment" in data
     assert "background_investigation" in data
 
+
+
+def test_api_mitigation_with_selected_dataset():
+    payload = {
+        "dataset": "senior_python_backend_engineer.csv",
+        "job_id": "JOB_SWE_01",
+        "mode": "Deterministic Mode"
+    }
+    res = client.post("/api/mitigation", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["active_dataset"] == "senior_python_backend_engineer.csv"
+    assert len(data["before_evaluations"]) > 0
+    assert data["before_evaluations"][0]["candidate_id"].startswith("PY_SWE")
+    assert "summary" in data
+    assert "mean_efs_before" in data["summary"]
+    assert "mean_efs_after" in data["summary"]
+
+def test_api_mitigation_with_custom_candidates():
+    payload = {
+        "candidates": [
+            {
+                "candidate_id": "CUSTOM_PY_01",
+                "name": "Jane Doe",
+                "skills": "Python, SQL, PostgreSQL, REST API, Git, FastAPI",
+                "experience_years": 6.0,
+                "education": "B.Tech Computer Science"
+            }
+        ],
+        "job_id": "JOB_SWE_01",
+        "mode": "Deterministic Mode"
+    }
+    res = client.post("/api/mitigation", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["before_evaluations"]) == 1
+    assert data["before_evaluations"][0]["candidate_id"] == "CUSTOM_PY_01"
+    assert data["before_evaluations"][0]["name"] == "Jane Doe"

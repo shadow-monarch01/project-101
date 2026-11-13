@@ -51,6 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await fetchJobs();
     await fetchDatasets();
     await loadCandidatePool();
+    updateMitigationDatasetUI();
 });
 
 function initTheme() {
@@ -239,14 +240,22 @@ function openRoleModal(jobId) {
             opt.value = ds;
             opt.innerText = ds;
             
-            // Smart preset matching
-            if (jobId.includes("DEV") && ds.includes("devops")) opt.selected = true;
-            else if (jobId.includes("AI") && ds.includes("data_science")) opt.selected = true;
-            else if (jobId.includes("SWE") && ds.includes("software")) opt.selected = true;
-            else if (ds === state.activeDataset) opt.selected = true;
+            // Smart preset matching: prioritize active dataset first
+            if (ds === state.activeDataset) {
+                opt.selected = true;
+            } else if (!state.activeDataset && jobId.includes("DEV") && ds.includes("devops")) {
+                opt.selected = true;
+            } else if (!state.activeDataset && jobId.includes("AI") && ds.includes("data_science")) {
+                opt.selected = true;
+            } else if (!state.activeDataset && jobId.includes("SWE") && ds.includes("software")) {
+                opt.selected = true;
+            }
 
             dsSel.appendChild(opt);
         });
+        if (state.activeDataset) {
+            dsSel.value = state.activeDataset;
+        }
     }
 
     // Reset upload state
@@ -326,6 +335,7 @@ function setupModal() {
             renderRoleCards();
 
             await loadCandidatePool();
+            updateMitigationDatasetUI();
             unlockTabs();
         });
     }
@@ -360,12 +370,15 @@ function setupModal() {
                 state.activeJob = state.jobs.find(j => j.job_id === state.activeJobId);
                 state.activeDataset = data.filename;
 
+                await fetchDatasets();
+
                 closeRoleModal();
                 updateHeaderRolePill();
                 renderJobSpecCard();
                 renderRoleCards();
 
                 await loadCandidatePool();
+                updateMitigationDatasetUI();
                 unlockTabs();
             } catch (e) {
                 console.error("Upload error:", e);
@@ -489,6 +502,28 @@ function setupEventListeners() {
     // Mitigation Execution
     const mitBtn = document.getElementById("btn-execute-mitigation");
     if (mitBtn) mitBtn.addEventListener("click", runMitigationFeedbackLoop);
+
+    // Mitigation Dataset Selector
+    const mitDsSel = document.getElementById("mitigation-dataset-selector");
+    if (mitDsSel) {
+        mitDsSel.addEventListener("change", async (e) => {
+            const chosen = e.target.value;
+            if (!chosen) return;
+            state.activeDataset = chosen;
+            try {
+                await fetch("/api/select_dataset", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: chosen })
+                });
+                await loadCandidatePool();
+                updateMitigationDatasetUI();
+                appendMitigationLog("SYSTEM", `Active mitigation pool switched to: <strong>${chosen}</strong> (${state.candidatePool.length} candidates loaded). Ready to run mitigation loop.`);
+            } catch (err) {
+                console.error("Error switching mitigation dataset:", err);
+            }
+        });
+    }
 
     // Mitigation Log Console Controls
     const clearLogBtn = document.getElementById("btn-clear-mitigation-logs");
@@ -840,11 +875,37 @@ async function fetchJobs() {
     }
 }
 
+function updateMitigationDatasetUI() {
+    const dsSel = document.getElementById("mitigation-dataset-selector");
+    if (dsSel) {
+        dsSel.innerHTML = "";
+        (state.datasets || []).forEach(ds => {
+            const opt = document.createElement("option");
+            opt.value = ds;
+            opt.innerText = ds;
+            if (ds === state.activeDataset) opt.selected = true;
+            dsSel.appendChild(opt);
+        });
+        if (state.activeDataset) {
+            dsSel.value = state.activeDataset;
+        }
+    }
+    const badge = document.getElementById("mitigation-active-pool-badge");
+    if (badge) {
+        const count = state.candidatePool ? state.candidatePool.length : 0;
+        badge.innerText = `Pool: ${state.activeDataset || "None"} (${count} candidates)`;
+    }
+}
+
 async function fetchDatasets() {
     try {
         const res = await fetch("/api/datasets");
         const data = await res.json();
         state.datasets = data.datasets || [];
+        if (data.active_dataset) {
+            state.activeDataset = data.active_dataset;
+        }
+        updateMitigationDatasetUI();
     } catch (e) {
         console.error("Error fetching datasets:", e);
     }
@@ -861,6 +922,7 @@ async function loadCandidatePool() {
         if (state.candidatePool.length > 0) {
             selectCandidateById(state.candidatePool[0].candidate_id, false);
         }
+        updateMitigationDatasetUI();
         await runBatchAudit();
     } catch (e) {
         console.error("Error loading candidate pool:", e);
@@ -1271,6 +1333,7 @@ async function runBatchAudit() {
             state.candidatePool = data.candidates;
             applyCandidateFilters();
             populatePlaygroundCandidateSelector(state.candidatePool);
+            updateMitigationDatasetUI();
         }
     } catch (e) {
         console.error("Batch audit error:", e);
@@ -1594,6 +1657,9 @@ async function runMitigationFeedbackLoop() {
     const btnText = document.getElementById("mitigation-btn-text");
     const statusDot = document.getElementById("console-status-dot");
     const tbody = document.getElementById("mitigation-results-tbody");
+    const mitDsSel = document.getElementById("mitigation-dataset-selector");
+    const targetDataset = (mitDsSel && mitDsSel.value) ? mitDsSel.value : state.activeDataset;
+    state.activeDataset = targetDataset;
 
     if (mitBtn) {
         mitBtn.disabled = true;
@@ -1604,16 +1670,18 @@ async function runMitigationFeedbackLoop() {
 
     renderMitigationSkeletonRows(tbody, 6);
 
-    appendMitigationLog("SYSTEM", "Starting Grounded Mitigation Feedback Loop over active candidate cohort...");
+    appendMitigationLog("SYSTEM", `Starting Grounded Mitigation Feedback Loop over active cohort [${targetDataset}]...`);
     appendMitigationLog("BASELINE", "Phase 1: Running unconstrained baseline SLM inference...");
 
     try {
-        const candsToAudit = (state.candidatePool && state.candidatePool.length > 0) ? state.candidatePool.slice(0, 8) : [];
+        const candsToAudit = (state.candidatePool && state.candidatePool.length > 0) ? state.candidatePool.slice(0, 10) : [];
         const res = await fetch("/api/mitigation", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 candidates: candsToAudit,
+                dataset: targetDataset,
+                job_id: state.activeJobId,
                 job: state.activeJob,
                 mode: state.evalMode
             })
@@ -1627,7 +1695,7 @@ async function runMitigationFeedbackLoop() {
         state.lastMitigationData = data;
         const sum = data.summary || {};
 
-        appendMitigationLog("AUDIT", `Phase 2: Analyzed ${(data.before_evaluations || []).length} candidate profiles for Evidence Faithfulness (EFS).`);
+        appendMitigationLog("AUDIT", `Phase 2: Analyzed ${(data.before_evaluations || []).length} candidate profiles from [${targetDataset}] for Evidence Faithfulness (EFS).`);
         
         const flaggedCount = sum.flagged_candidates_before || (data.before_evaluations ? data.before_evaluations.filter(b => b.efs_score < 90).length : 0);
         if (flaggedCount > 0) {
@@ -1651,17 +1719,17 @@ async function runMitigationFeedbackLoop() {
 
         // Update Summary Cards
         const covBefore = document.getElementById("mit-cov-before");
-        if (covBefore) covBefore.innerText = "85.0%";
+        if (covBefore) covBefore.innerText = `${sum.mean_coverage_before !== undefined ? sum.mean_coverage_before : 85.0}%`;
         const covAfter = document.getElementById("mit-cov-after");
-        if (covAfter) covAfter.innerText = "98.5%";
+        if (covAfter) covAfter.innerText = `${sum.mean_coverage_after !== undefined ? sum.mean_coverage_after : 98.5}%`;
         const efsBefore = document.getElementById("mit-efs-before");
-        if (efsBefore) efsBefore.innerText = `${sum.mean_efs_before || 88.0} / 100`;
+        if (efsBefore) efsBefore.innerText = `${sum.mean_efs_before !== undefined ? sum.mean_efs_before : 88.0} / 100`;
         const efsAfter = document.getElementById("mit-efs-after");
-        if (efsAfter) efsAfter.innerText = `${sum.mean_efs_after || 98.5} / 100`;
+        if (efsAfter) efsAfter.innerText = `${sum.mean_efs_after !== undefined ? sum.mean_efs_after : 98.5} / 100`;
         const flaggedBefore = document.getElementById("mit-flagged-before");
-        if (flaggedBefore) flaggedBefore.innerText = `${flaggedCount} Candidates`;
+        if (flaggedBefore) flaggedBefore.innerText = `${flaggedCount} Candidate${flaggedCount === 1 ? '' : 's'}`;
         const redPct = document.getElementById("mit-reduction-pct");
-        if (redPct) redPct.innerText = "100% Consistent";
+        if (redPct) redPct.innerText = `${sum.consistency_rate !== undefined ? sum.consistency_rate : 100}% Consistent`;
 
         // Render Table Rows
         if (tbody) {
@@ -1736,7 +1804,7 @@ function openMitigationDiffModal(candidateId) {
     const nameEl = document.getElementById("diff-modal-cand-name");
     const metaEl = document.getElementById("diff-modal-cand-meta");
     if (nameEl) nameEl.innerText = `${b.name} (${b.candidate_id})`;
-    if (metaEl) metaEl.innerText = `Qualification Score: ${b.qualification_score}% | Role: Senior Backend Engineer`;
+    if (metaEl) metaEl.innerText = `Qualification Score: ${b.qualification_score}% | Role: ${state.activeJob ? state.activeJob.title : (b.role || "Engineer")}`;
 
     const bBadge = document.getElementById("diff-before-dec-badge");
     if (bBadge) {
