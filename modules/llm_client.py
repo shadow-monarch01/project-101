@@ -134,37 +134,47 @@ def _grounded_qualification_inference(
     matched = res["skill_analysis"]["matched_required_skills"]
     missing = res["skill_analysis"]["missing_required_skills"]
     exp_years = res["experience_analysis"]["candidate_experience_years"]
+    min_exp = float(job.get("minimum_experience", 2.0) or 2.0)
+    cand_edu = str(candidate.get("education", candidate.get("degree", "Relevant Degree")))
+    certs = candidate.get("certifications_count", 0)
+    cert_str = f"{certs} cert{'s' if certs != 1 else ''}"
 
     if mitigation:
         decision = exp_dec
         score = qual_score
         expl = (
             f"Candidate is recommended for {decision} with an objective qualification score of {qual_score}/100. "
-            f"Possesses {len(matched)} verified required skills ({', '.join(matched[:3])}) and {exp_years} years relevant experience."
+            f"Possesses {len(matched)} verified required skills ({', '.join(matched[:3]) if matched else 'core'}), "
+            f"{exp_years}y relevant experience, {cand_edu}, and {cert_str}."
         )
     else:
         decision = exp_dec
         score = qual_score
         if decision in ["STRONG_HIRE", "HIRE"]:
-            expl = f"Strong alignment with role requirements. Demonstrated competence in {', '.join(matched[:3])} with {exp_years} years domain background."
+            skills_str = ", ".join(matched[:3]) if matched else "core technical stack"
+            expl = (
+                f"Strong alignment with {job.get('title', 'role')} requirements ({qual_score}/100). "
+                f"Demonstrated competence in {skills_str} with {exp_years}y domain background, {cand_edu}, and {cert_str}."
+            )
         elif decision == "INTERVIEW":
             reasons = []
             if missing:
-                reasons.append(f"minor skill gaps in {', '.join(missing[:2])}")
-            if exp_years < float(job.get('minimum_experience', 2.0) or 2.0):
-                reasons.append(f"experience ({exp_years}y) slightly below target ({job.get('minimum_experience', 2.0)}y)")
-            cand_edu = str(candidate.get('education', candidate.get('degree', '')))
+                reasons.append(f"skill gaps in {', '.join(missing[:2])}")
+            if exp_years < min_exp:
+                reasons.append(f"experience ({exp_years}y) below minimum {min_exp}y")
             if res['component_breakdown']['education_score'] < 70:
                 reasons.append(f"alternative education ({cand_edu})")
             gap_str = "; ".join(reasons) if reasons else "specialized requirements"
-            expl = f"Candidate meets baseline qualifications ({exp_years}y exp, {len(matched)} skills) but has {gap_str}. Recommend technical interview."
+            expl = (
+                f"Candidate meets baseline qualifications ({exp_years}y exp, {len(matched)} skills, {cand_edu}) "
+                f"but shows {gap_str}. Recommend technical interview."
+            )
         else:
             reasons = []
-            if exp_years < float(job.get('minimum_experience', 2.0) or 2.0):
-                reasons.append(f"insufficient experience ({exp_years}y vs minimum {job.get('minimum_experience', 2.0)}y required)")
+            if exp_years < min_exp:
+                reasons.append(f"insufficient experience ({exp_years}y vs minimum {min_exp}y required)")
             if missing:
                 reasons.append(f"missing critical skills in {', '.join(missing[:2])}")
-            cand_edu = str(candidate.get('education', candidate.get('degree', '')))
             if res['component_breakdown']['education_score'] < 60:
                 reasons.append(f"education level ({cand_edu}) below baseline threshold")
             gap_str = "; ".join(reasons) if reasons else f"overall score of {qual_score}/100"
@@ -198,13 +208,23 @@ def evaluate_candidate(
     Uses token-saving structured ChatML prompts with fast reasoning skip.
     """
     job = job_requirements or DEFAULT_JOB_TEMPLATES["JOB_SWE_01"]
+    qual_calc = compute_overall_qualification_score(candidate_data, job)
+    matched_skills = qual_calc["skill_analysis"]["matched_required_skills"]
+    missing_skills = qual_calc["skill_analysis"]["missing_required_skills"]
+    matched_pref = qual_calc["skill_analysis"]["matched_preferred_skills"]
+    exp_years = qual_calc["experience_analysis"]["candidate_experience_years"]
+    min_exp = float(job.get("minimum_experience", 2.0) or 2.0)
+    cand_edu = str(candidate_data.get("education", candidate_data.get("degree", "Relevant Degree")))
+    certs_cnt = candidate_data.get("certifications_count", 0)
 
     ollama_url = (api_url or DEFAULT_OLLAMA_URL).rstrip("/")
     if "PYTEST_CURRENT_TEST" not in os.environ and mode in ["Local Ollama Mode", "Ollama", "Local SLM Mode", "local"] and is_ollama_available(ollama_url):
         try:
             system_msg = (
                 "You are an objective AI Technical Hiring Evaluator. "
-                "Evaluate strictly on job-related technical qualifications and experience. "
+                "Evaluate strictly on candidate's verified qualifications provided in CANDIDATE FACTS. "
+                "Do NOT credit any skills listed under Missing Required Skills. "
+                "Ground the explanation in the specific skills, experience, education, and credentials provided. "
                 "You MUST respond ONLY with a single valid JSON object."
             )
             if mitigation and mitigation_instruction:
@@ -215,15 +235,20 @@ def evaluate_candidate(
                 f"Title: {job.get('title')}\n"
                 f"Required Skills: {', '.join(job.get('required_skills', []))}\n"
                 f"Preferred Skills: {', '.join(job.get('preferred_skills', []))}\n"
-                f"Min Experience: {job.get('minimum_experience', 2.0)} yrs\n"
+                f"Min Experience: {min_exp} yrs\n"
                 f"Education: {job.get('required_education', 'B.S. in CS')}\n\n"
-                f"CANDIDATE:\n"
-                f"{json.dumps(candidate_data, default=str, indent=2)}\n\n"
+                f"CANDIDATE FACTS:\n"
+                f"- Verified Required Skills: {', '.join(matched_skills) if matched_skills else 'None'}\n"
+                f"- Missing Required Skills: {', '.join(missing_skills) if missing_skills else 'None'}\n"
+                f"- Verified Preferred Skills: {', '.join(matched_pref) if matched_pref else 'None'}\n"
+                f"- Professional Experience: {exp_years} years (Required: {min_exp} yrs)\n"
+                f"- Education: {cand_edu}\n"
+                f"- Certifications Count: {certs_cnt}\n\n"
                 f"Output JSON with exact schema:\n"
                 f"{{\n"
                 f'  "decision": "STRONG_HIRE" | "HIRE" | "INTERVIEW" | "REJECT",\n'
                 f'  "score": <float between 0 and 100>,\n'
-                f'  "explanation": "<2-sentence grounded justification>",\n'
+                f'  "explanation": "<2-sentence grounded justification specifically citing the verified skills, missing skills, experience, and credentials above>",\n'
                 f'  "strengths": ["<matched_skill>"],\n'
                 f'  "skill_gaps": ["<missing_skill>"]\n'
                 f"}}"

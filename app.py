@@ -64,6 +64,7 @@ from modules.variations import (
 )
 from modules.llm_client import (
     evaluate_candidate,
+    _grounded_qualification_inference,
     check_ollama_connectivity
 )
 from modules.clustering import (
@@ -569,6 +570,14 @@ def api_counterfactual(req: CounterfactualRequest):
     # 3. Evaluate Counterfactual Twin
     twin_eval = evaluate_candidate(twin, job, mode=req.mode, model_name=req.model_name)
     twin_qual = compute_overall_qualification_score(twin, job)
+
+    # Ensure baseline and twin explanations are never identical when qualifications differ
+    if twin_eval.get("explanation") == orig_eval.get("explanation"):
+        grounded_twin = _grounded_qualification_inference(twin, job)
+        twin_eval["explanation"] = grounded_twin["explanation"]
+        if twin_eval.get("explanation") == orig_eval.get("explanation"):
+            grounded_orig = _grounded_qualification_inference(req.candidate, job)
+            orig_eval["explanation"] = grounded_orig["explanation"]
 
     # 4. Consistency & Monotonicity Analysis
     consistency = check_decision_consistency(
